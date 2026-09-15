@@ -9,7 +9,7 @@ how close the best score is to the threshold.
 
 import config
 from .candidates import generate_candidate
-from .propose import propose_refinement
+from ..propose import propose_refinement
 from .score import score_candidate
 
 

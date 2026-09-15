@@ -6,9 +6,9 @@ full CRISP-style loop for one (trait, level, scenario) combination.
 import logging
 
 import config
-from .evaluate import evaluate_response
-from .generate import generate_initial_steps
-from .search import refine_step
+from .pipeline.evaluate import evaluate_response
+from .pipeline.generate import generate_initial_steps
+from .pipeline.search import refine_step
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
