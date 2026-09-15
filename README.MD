@@ -48,6 +48,61 @@ This produces:
   - `search.py` -- the reward-based candidate search over a step
   - `orchestrator.py` -- ties every stage together into the full loop
 
+## Walkthrough: how data flows through the pipeline
+
+For **one** (trait, level, scenario) combination:
+
+1. **`pipeline/generate.py`** calls the model once to write a response to
+   the scenario at the target trait/intensity, already broken into JSON
+   steps (roughly one sentence per step).
+2. **`pipeline/orchestrator.py`** takes those steps and enters its main
+   loop (up to `MAX_TOTAL_PASSES` times):
+   - **`pipeline/evaluate.py`** sends the whole response to the judge
+     model, which returns either `"appropriate"` (done) or
+     `"needs_refinement"` plus the *one* step ID it thinks is most wrong
+     and why.
+   - If refinement is needed, the flagged step is handed to
+     **`pipeline/search.py`**.
+3. Inside `search.py`:
+   - **`pipeline/propose.py`** decides the fix type: adjust wording,
+     delete the step, or add a missing one.
+   - If it's "adjust," **`pipeline/candidates.py`** generates
+     `CANDIDATES_PER_ITERATION` (default 3) rewritten versions of that
+     one step.
+   - **`pipeline/score.py`** rates each candidate 1-10 against the target
+     trait/intensity.
+   - The best-scoring candidate replaces the step. If its score is still
+     below `REWARD_THRESHOLD` (default 8), the loop repeats -- narrowing
+     the rewrite if the score was close (>=5), or trying a broader
+     rewrite if it was way off (<5). Repeats up to
+     `MAX_ITERATIONS_PER_STEP` times.
+4. Control returns to the orchestrator, which **re-runs the holistic
+   judge on the whole updated response**, not just the fixed step, since
+   a locally-good fix can still read oddly in context.
+5. This repeats until the judge says "appropriate," or
+   `MAX_TOTAL_PASSES` is exhausted, whichever comes first.
+6. **`generate_dataset.py`** loops steps 1-5 over every trait x level x
+   scenario combination in `config.py` and writes `dataset.jsonl` and
+   `dataset_audit.jsonl`.
+
+## How you'd actually interact with it
+
+- **Before running anything**: edit `config.py` -- this is basically your
+  whole experiment design (which traits, which intensity levels, which
+  scenarios, how strict the threshold is).
+- **Set your key**: copy `config.env.example` to `config.env` and paste
+  your real key in.
+- **Run it**: `python generate_dataset.py`. No other interaction is
+  needed -- it runs the full grid unattended and logs progress to the
+  console as it goes.
+- **After it finishes**: open `dataset.jsonl` for the training-ready
+  data, and `dataset_audit.jsonl` when you want to debug a specific
+  example or spot-check judge behavior.
+- **Iterating on quality**: if outputs aren't good, you'll mostly be
+  tuning two things -- the prompts in `prompts.py` (e.g. the judge's
+  rubric) or the thresholds/search settings in `config.py` -- rather
+  than touching the pipeline logic itself.
+
 ## How this maps to the original CRISP paper
 
 | Paper (robot behavior) | This pipeline (text) |
