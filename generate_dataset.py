@@ -16,7 +16,7 @@ import json
 import logging
 
 import config
-from crisp_pipeline import run_pipeline
+from pipeline import run_pipeline
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)

@@ -8,8 +8,13 @@ trait-conditioned synthetic training data.
 
 ```bash
 pip install openai
-export OPENAI_API_KEY=your_key_here
+cp config.env.example config.env
+# then edit config.env and paste in your real key:
+#   API_KEY=your_key_here
 ```
+
+`llm_client.py` reads the key directly from `config.env` (no environment
+variable needed). Keep `config.env` out of version control.
 
 ## Run
 
@@ -28,23 +33,31 @@ This produces:
 
 - `config.py` -- traits, intensity levels, scenarios, models, thresholds.
   **Edit this first** to match your study design.
+- `config.env.example` -- copy to `config.env` and fill in your real API key.
 - `prompts.py` -- every prompt template used by the loop.
-- `llm_client.py` -- thin OpenAI API wrapper with JSON-safe parsing and retries.
-- `crisp_pipeline.py` -- the actual generate -> critique -> pinpoint ->
-  refine -> score loop.
+- `llm_client.py` -- thin OpenAI API wrapper with JSON-safe parsing, retries,
+  and config.env loading.
 - `generate_dataset.py` -- loops the pipeline over your full trait/level/
   scenario grid and writes output files.
+- `pipeline/` -- the CRISP loop, one module per stage:
+  - `generate.py` -- initial step-broken response generation
+  - `evaluate.py` -- holistic judge, pinpoints the flawed step
+  - `propose.py` -- decides adjust / delete / add and gives guidance
+  - `candidates.py` -- samples a candidate rewrite of a flawed step
+  - `score.py` -- scores a single candidate 1-10
+  - `search.py` -- the reward-based candidate search over a step
+  - `orchestrator.py` -- ties every stage together into the full loop
 
 ## How this maps to the original CRISP paper
 
 | Paper (robot behavior) | This pipeline (text) |
 |---|---|
 | Robot structure file (joints, limits) | `TRAITS` + `LEVELS` in config.py |
-| Behavior Generator (steps with timing) | `generate_initial_steps` (sentence-level steps) |
-| VLM holistic evaluation | `evaluate_response` (LLM judge) |
+| Behavior Generator (steps with timing) | `pipeline/generate.py` (sentence-level steps) |
+| VLM holistic evaluation | `pipeline/evaluate.py` (LLM judge) |
 | Pinpoint erroneous step | `flagged_step_id` in judge output |
-| Adjust / Delete / Add proposal | `propose_refinement` |
-| Reward-based Adaptive Search (3 candidates, sigma scaling) | `refine_step` (3 candidates, broad/fine search width) |
+| Adjust / Delete / Add proposal | `pipeline/propose.py` |
+| Reward-based Adaptive Search (3 candidates, sigma scaling) | `pipeline/search.py` (uses `candidates.py` + `score.py`) |
 | Termination at reward >= threshold | `REWARD_THRESHOLD` in config.py |
 
 ## Before you scale this up
