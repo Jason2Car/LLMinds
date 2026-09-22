@@ -8,11 +8,34 @@ conversational turn is generated and refined on the fly against a target
 ## Setup
 
 ```bash
-pip install openai
+pip install "openai<2"
 cp config.env.example config.env
 # edit config.env and paste in your real key:
 #   API_KEY=your_key_here
 ```
+
+**Important -- pin the `openai` package below v2.** As of late 2026, the
+`openai` Python library had a major rewrite (v2 and v3) that switched its
+underlying HTTP transport to a new library called HTTPX2, replacing the
+`httpx`-based client this code (and most existing OpenAI integrations)
+are written against. On at least one machine, installing the unpinned
+`openai` package (which resolved to a v3.x release) caused every call to
+fail with `process() takes no keyword arguments` immediately after a
+successful HTTP request -- the request reached OpenAI fine, but the new
+transport's response handling broke on parse. Pinning to `openai<2` uses
+the older, still-officially-supported Chat Completions client shape that
+`llm_client.py` is written for, and avoided the issue entirely.
+
+If you've already run `pip install openai` without the pin, downgrade
+with the same command above (`pip install "openai<2"`) -- it's safe to
+run even if a newer version is already installed, and no other project
+files need to change.
+
+If a future version of this codebase moves to the newer v2/v3 client
+(e.g. to use its new `client.responses.create` API), this section
+should be updated accordingly -- see the [HTTPX2 migration
+guide](https://github.com/openai/openai-python/tree/main/httpx2.md) if
+attempting that.
 
 ## Run
 
@@ -28,9 +51,12 @@ tolerance. Type `exit` to quit.
 ## Files
 
 - `config/weights.json` -- the target trait vector T (0-100 for each of
-  the 8 traits), plus `tolerance`, `max_iterations`, and
-  `broad_search_deviation_threshold`. **Edit this to change the
-  personality target.**
+  the 8 traits) and the allowed variance around it: `tolerance` (how many
+  points off a trait can be and still count as "close enough"),
+  `max_iterations` (refinement attempts before giving up), and
+  `broad_search_deviation_threshold` (how far off a trait must be to
+  trigger a broad rewrite vs. a small tweak). **Edit this to change the
+  personality target or how strict the matching is.**
 - `config/background.json` -- the persona backstory and tone notes, kept
   in a separate file from the weights so you can vary either
   independently.
