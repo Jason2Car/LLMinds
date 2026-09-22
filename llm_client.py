@@ -12,6 +12,7 @@ import json
 import os
 import re
 import time
+import traceback
 
 from openai import OpenAI
 
@@ -42,6 +43,7 @@ _client = OpenAI(api_key=_load_api_key())
 def call(model: str, prompt: str, max_tokens: int = 1024, retries: int = 3) -> str:
     """Call the model with a single user turn and return raw text output."""
     last_error = None
+    last_traceback = None
     for attempt in range(retries):
         try:
             response = _client.chat.completions.create(
@@ -52,17 +54,16 @@ def call(model: str, prompt: str, max_tokens: int = 1024, retries: int = 3) -> s
             return response.choices[0].message.content or ""
         except Exception as e:  # noqa: BLE001 - broad on purpose, we retry
             last_error = e
+            last_traceback = traceback.format_exc()
             time.sleep(2 ** attempt)
+    print("\n--- FULL TRACEBACK OF LAST ERROR ---")
+    print(last_traceback)
+    print("--- END TRACEBACK ---\n")
     raise RuntimeError(f"LLM call failed after {retries} attempts: {last_error}")
 
 
 def call_json(model: str, prompt: str, max_tokens: int = 1024, retries: int = 3) -> dict:
-    """Call the model and parse the response as JSON.
-
-    Strips markdown code fences if the model wraps its JSON in them, and
-    retries the whole call (not just the parse) if parsing fails, since a
-    fresh sample sometimes produces valid JSON when a previous one didn't.
-    """
+    """Call the model and parse the response as JSON."""
     last_error = None
     raw = ""
     for attempt in range(retries):

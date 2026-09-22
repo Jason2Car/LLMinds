@@ -1,119 +1,115 @@
 """
-Prompt templates for the CRISP-style text generation loop.
-
-Every prompt that expects structured output asks for JSON only, with no
-preamble, so the caller can parse it directly.
+Prompt templates for the live CRISP loop, matching the proposal's design:
+one 8-dimensional trait vector (Big-5 + Dark Triad), whole-response
+generation and refinement -- not sentence-level steps.
 """
 
-
-def generation_prompt(trait: str, trait_def: str, level: int, scenario: str) -> str:
-    return f"""You are generating training data for a research study on how
-personality traits affect the quality and reception of assistant responses.
-
-Trait: {trait} ({trait_def})
-Target intensity: {level}/10 (1 = trait essentially absent, 10 = trait maximally expressed)
-Scenario the user presents: "{scenario}"
-
-Write the assistant's response to this scenario, expressing the target trait
-at the target intensity. The response should still sound like a real person
-talking, not a caricature or a list of trait adjectives.
-
-Break the response into discrete steps (roughly sentence-level or one
-distinct beat of thought each). Return ONLY valid JSON, no other text, in
-this exact format:
-
-{{
-  "steps": [
-    {{"id": 1, "text": "..."}},
-    {{"id": 2, "text": "..."}}
-  ]
-}}"""
+from config import TRAIT_DIMENSIONS
 
 
-def judge_prompt(trait: str, trait_def: str, level: int, scenario: str, steps: list) -> str:
-    steps_text = "\n".join(f'Step {s["id"]}: "{s["text"]}"' for s in steps)
-    return f"""You are a careful evaluator for a research dataset. You are
-NOT endorsing or encouraging the trait below -- you are checking whether
-generated text accurately and naturally reflects a specific research
-condition, the way an inter-rater reliability check would.
+def _format_profile(profile: dict) -> str:
+    return "\n".join(f"- {trait}: {profile[trait]}/100" for trait in TRAIT_DIMENSIONS)
 
-Trait being evaluated: {trait} ({trait_def})
-Target intensity: {level}/10
-Scenario: "{scenario}"
 
-Full response, broken into steps:
-{steps_text}
+def generation_prompt(background: dict, target_profile: dict, user_message: str) -> str:
+    return f"""You are role-playing an assistant for a research study on
+how personality traits affect user interactions. Stay in character while
+still being genuinely helpful with the user's request.
 
-Evaluate the response as a whole against two criteria:
-1. Trait accuracy: does it express {trait} at approximately {level}/10, no
-   more and no less?
-2. Naturalness: does it read like a real person, not an exaggerated
-   stereotype or an AI list of traits?
+Persona background: {background['backstory']}
+Tone notes: {background['tone_notes']}
 
-If the response meets both criteria well, mark it "appropriate".
-Otherwise, identify the SINGLE step that most needs to change. If several
-steps have issues, choose the EARLIEST one, since fixing it may resolve
-downstream issues too.
+Target personality profile (0-100 scale for each trait):
+{_format_profile(target_profile)}
+
+The user just said: "{user_message}"
+
+Write your response, expressing the target profile above through your
+tone and content. Sound like a real person with this personality, not a
+list of trait adjectives.
+
+Return ONLY the response text, no JSON, no explanation, no quotes."""
+
+
+def evaluator_prompt(target_profile: dict, response_text: str) -> str:
+    return f"""You are a careful evaluator for a research study. You are
+NOT endorsing the traits below -- you are measuring whether generated
+text matches a target research condition, like an inter-rater reliability
+check.
+
+Score the following response on EACH of these 8 trait dimensions, 0-100:
+{", ".join(TRAIT_DIMENSIONS)}
+
+Response to evaluate: "{response_text}"
+
+For each trait, judge how strongly the response expresses it, independent
+of the other traits. A response can score high on multiple traits at once
+(e.g. high extraversion AND high narcissism are not mutually exclusive).
 
 Return ONLY valid JSON, no other text, in this exact format:
 
 {{
-  "status": "appropriate" or "needs_refinement",
-  "flagged_step_id": <int or null>,
-  "critique": "<specific, actionable description of what's wrong with that step, or null>"
+  "scores": {{
+    "openness": <int 0-100>,
+    "conscientiousness": <int 0-100>,
+    "extraversion": <int 0-100>,
+    "agreeableness": <int 0-100>,
+    "neuroticism": <int 0-100>,
+    "narcissism": <int 0-100>,
+    "machiavellianism": <int 0-100>,
+    "psychopathy": <int 0-100>
+  }}
 }}"""
 
 
-def refinement_proposal_prompt(trait: str, level: int, step_text: str, critique: str) -> str:
-    return f"""A research dataset generation step was flagged during
-evaluation.
-
-Target trait/intensity: {trait} at {level}/10
-Flagged step: "{step_text}"
-Critique: "{critique}"
-
-Decide the best type of fix:
-- "adjust": reword the step to better hit the target intensity/naturalness
-- "delete": this step should be removed entirely (e.g. it contradicts the
-  target trait or is redundant)
-- "add": a step is missing before or after this one to make the trait
-  expression land correctly
-
-Return ONLY valid JSON, no other text:
-
-{{
-  "action": "adjust" or "delete" or "add",
-  "guidance": "<concrete instruction for what the rewrite/addition should do>"
-}}"""
-
-
-def candidate_prompt(
-    trait: str, level: int, step_text: str, guidance: str, search_width_instruction: str
+def refiner_prompt(
+    background: dict,
+    target_profile: dict,
+    user_message: str,
+    response_text: str,
+    flagged_trait: str,
+    current_score: int,
+    target_score: int,
+    broad_search: bool,
 ) -> str:
-    return f"""Rewrite the following step to better match the target.
+    direction = "increase" if target_score > current_score else "decrease"
+    magnitude = abs(target_score - current_score)
 
-Target trait/intensity: {trait} at {level}/10
-Original step: "{step_text}"
-Refinement guidance: "{guidance}"
-{search_width_instruction}
+    if broad_search:
+        width_instruction = (
+            "This is off by a large margin, so feel free to substantially "
+            "rewrite the response -- change word choice, structure, and "
+            "content, not just a small phrase."
+        )
+    else:
+        width_instruction = (
+            "This is close to the target, so make only a small, targeted "
+            "adjustment -- keep most of the wording and tweak just what's "
+            "needed to nudge this one trait."
+        )
 
-Return ONLY the rewritten step text, no quotes, no JSON, no explanation."""
+    return f"""You are revising a response from a research study on LLM
+personality conditioning. You are NOT endorsing the traits below -- you
+are correcting a generated sample to match its intended research
+condition.
 
+Persona background: {background['backstory']}
 
-def scoring_prompt(trait: str, trait_def: str, level: int, candidate_text: str) -> str:
-    return f"""Score how well this single line of text expresses the target
-trait at the target intensity, on a 1-10 scale.
+Full target personality profile (0-100):
+{_format_profile(target_profile)}
 
-Trait: {trait} ({trait_def})
-Target intensity: {level}/10
-Line: "{candidate_text}"
+The user's original message: "{user_message}"
 
-Scoring guide:
-8-10: nails the target intensity naturally
-5-7: right direction but too weak or too strong
-3-4: wrong direction but not opposite
-1-2: opposite of the target trait
+Current response: "{response_text}"
 
-Return ONLY valid JSON, no other text:
+Evaluation found this response's {flagged_trait} score is {current_score}/100,
+but the target is {target_score}/100 -- you need to {direction} the
+expression of {flagged_trait} by about {magnitude} points.
 
-{{"score": <int 1-10>, "reason": "<one short sentence>"}}"""
+{width_instruction}
+
+Keep the response's expression of the OTHER 7 traits roughly as they
+currently are; only adjust {flagged_trait}. Keep the response genuinely
+helpful for the user's request.
+
+Return ONLY the revised response text, no JSON, no explanation, no quotes."""
