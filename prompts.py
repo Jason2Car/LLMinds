@@ -11,7 +11,20 @@ def _format_profile(profile: dict) -> str:
     return "\n".join(f"- {trait}: {profile[trait]}/100" for trait in TRAIT_DIMENSIONS)
 
 
-def generation_prompt(background: dict, target_profile: dict, user_message: str) -> str:
+def _format_history(conversation_history: list) -> str:
+    if not conversation_history:
+        return ""
+    lines = []
+    for turn in conversation_history:
+        speaker = "User" if turn["role"] == "user" else "Assistant"
+        lines.append(f"{speaker}: {turn['content']}")
+    return "Conversation so far:\n" + "\n".join(lines) + "\n\n"
+
+
+def generation_prompt(
+    background: dict, target_profile: dict, user_message: str, conversation_history: list = None
+) -> str:
+    history_block = _format_history(conversation_history)
     return f"""You are role-playing an assistant for a research study on
 how personality traits affect user interactions. Stay in character while
 still being genuinely helpful with the user's request.
@@ -22,11 +35,12 @@ Tone notes: {background['tone_notes']}
 Target personality profile (0-100 scale for each trait):
 {_format_profile(target_profile)}
 
-The user just said: "{user_message}"
+{history_block}The user's latest message: "{user_message}"
 
 Write your response, expressing the target profile above through your
 tone and content. Sound like a real person with this personality, not a
-list of trait adjectives.
+list of trait adjectives. Stay consistent with anything you or the user
+already said earlier in the conversation.
 
 Return ONLY the response text, no JSON, no explanation, no quotes."""
 
@@ -71,9 +85,11 @@ def refiner_prompt(
     current_score: int,
     target_score: int,
     broad_search: bool,
+    conversation_history: list = None,
 ) -> str:
     direction = "increase" if target_score > current_score else "decrease"
     magnitude = abs(target_score - current_score)
+    history_block = _format_history(conversation_history)
 
     if broad_search:
         width_instruction = (
@@ -98,7 +114,7 @@ Persona background: {background['backstory']}
 Full target personality profile (0-100):
 {_format_profile(target_profile)}
 
-The user's original message: "{user_message}"
+{history_block}The user's message this turn: "{user_message}"
 
 Current response: "{response_text}"
 
@@ -110,6 +126,7 @@ expression of {flagged_trait} by about {magnitude} points.
 
 Keep the response's expression of the OTHER 7 traits roughly as they
 currently are; only adjust {flagged_trait}. Keep the response genuinely
-helpful for the user's request.
+helpful for the user's request, and consistent with the conversation so
+far.
 
 Return ONLY the revised response text, no JSON, no explanation, no quotes."""

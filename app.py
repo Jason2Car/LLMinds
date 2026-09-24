@@ -5,10 +5,12 @@ Usage:
     python app.py
 
 Type a message and press enter. Type 'exit' to quit. Type 'scores' after
-any response to see the last turn's full 8-trait score breakdown.
+any response to see the last turn's full 8-trait score/tolerance
+breakdown. The session remembers the whole conversation, so later
+messages can refer back to earlier ones.
 """
 
-from core import handle_user_message
+from core import CrispSession
 
 _last_result = None
 
@@ -16,6 +18,7 @@ _last_result = None
 def main():
     global _last_result
 
+    session = CrispSession()
     print("Live CRISP-conditioned assistant. Type 'exit' to quit, 'scores' for last turn's trait breakdown.\n")
 
     while True:
@@ -30,10 +33,12 @@ def main():
             else:
                 print(f"Converged: {_last_result['converged']} (iterations used: {_last_result['iterations_used']})")
                 for trait, score in _last_result["scores"].items():
-                    print(f"  {trait}: {score}")
+                    excess = _last_result["excess"][trait]
+                    status = "OK" if excess <= 0 else f"OVER by {excess}"
+                    print(f"  {trait}: {score}  ({status})")
             continue
 
-        _last_result = handle_user_message(user_message)
+        _last_result = session.handle_user_message(user_message)
         print(f"\nAssistant: {_last_result['response']}\n")
 
 

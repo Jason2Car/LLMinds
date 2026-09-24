@@ -39,9 +39,19 @@ def load_weights(path: str = _WEIGHTS_PATH) -> dict:
     with open(path) as f:
         weights = json.load(f)
 
-    missing = set(TRAIT_DIMENSIONS) - set(weights["target_profile"])
-    if missing:
-        raise ValueError(f"weights.json target_profile is missing traits: {missing}")
+    missing_profile = set(TRAIT_DIMENSIONS) - set(weights["target_profile"])
+    if missing_profile:
+        raise ValueError(f"weights.json target_profile is missing traits: {missing_profile}")
+
+    if not isinstance(weights.get("tolerance"), dict):
+        raise ValueError(
+            "weights.json 'tolerance' must be a per-trait object, e.g. "
+            '{"openness": 20, ..., "psychopathy": 8}, not a single number.'
+        )
+
+    missing_tolerance = set(TRAIT_DIMENSIONS) - set(weights["tolerance"])
+    if missing_tolerance:
+        raise ValueError(f"weights.json tolerance is missing traits: {missing_tolerance}")
 
     return weights
 
