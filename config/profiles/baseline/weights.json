@@ -1,0 +1,15 @@
+{
+  "target_profile": {
+    "openness": 50,
+    "conscientiousness": 50,
+    "extraversion": 50,
+    "agreeableness": 50,
+    "neuroticism": 30,
+    "narcissism": 30,
+    "machiavellianism": 30,
+    "psychopathy": 30
+  },
+  "tolerance": 10,
+  "max_iterations": 6,
+  "broad_search_deviation_threshold": 30
+}
