@@ -62,6 +62,13 @@ def call(model: str, prompt: str, max_tokens: int = 1024, retries: int = 3) -> s
     raise RuntimeError(f"LLM call failed after {retries} attempts: {last_error}")
 
 
+def transcribe(audio_path: str, model: str = "whisper-1") -> str:
+    """Transcribe an audio file to text using OpenAI's Whisper API."""
+    with open(audio_path, "rb") as f:
+        transcript = _client.audio.transcriptions.create(model=model, file=f)
+    return transcript.text.strip()
+
+
 def call_json(model: str, prompt: str, max_tokens: int = 1024, retries: int = 3) -> dict:
     """Call the model and parse the response as JSON."""
     last_error = None

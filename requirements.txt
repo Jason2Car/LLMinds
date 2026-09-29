@@ -1,1 +1,5 @@
 openai<2
+
+# Optional, only needed if VOICE_INPUT=true in config.env:
+sounddevice
+scipy

@@ -50,6 +50,27 @@ earlier messages. Type `scores` after any turn to see the full 8-trait
 breakdown, whether each trait is within its own tolerance, and whether
 the turn converged. Type `exit` to quit.
 
+### Voice input (optional)
+
+Instead of typing, you can speak each turn and have it transcribed with
+OpenAI's Whisper API. Enable it in `config.env`:
+
+```bash
+pip install sounddevice scipy
+```
+
+```
+VOICE_INPUT=true
+WHISPER_MODEL=whisper-1        # optional, this is the default
+VOICE_INPUT_DURATION=5         # optional, seconds recorded per turn
+```
+
+With `VOICE_INPUT=true`, each turn records `VOICE_INPUT_DURATION` seconds
+from the default microphone, transcribes it via `llm_client.transcribe`
+(Whisper), and uses the resulting text as if you had typed it -- `scores`
+and `exit` still work as spoken commands. Leave `VOICE_INPUT` unset or
+`false` to keep using the keyboard.
+
 ## Files
 
 - `config/weights.json` -- the target trait vector T (0-100 for each of
@@ -68,7 +89,10 @@ the turn converged. Type `exit` to quit.
 - `config.py` -- loads both config files; also holds which model plays
   each role (generator/evaluator/refiner) and the 8 trait dimension names.
 - `config.env.example` -- copy to `config.env` and fill in your real API key.
-- `llm_client.py` -- thin OpenAI API wrapper, reads the key from `config.env`.
+- `llm_client.py` -- thin OpenAI API wrapper, reads the key from `config.env`;
+  also exposes `transcribe()` for Whisper audio transcription.
+- `voice_input.py` -- records from the microphone and transcribes with
+  Whisper, used by `app.py` when `VOICE_INPUT=true`.
 - `prompts.py` -- every prompt template used by the loop.
 - `app.py` -- interactive CLI for talking to the live assistant.
 - `core/` -- the four-stage CRISP loop, one module per stage:

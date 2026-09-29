@@ -66,6 +66,16 @@ def _log_turn(user_message: str, result: dict):
     _log_file.flush()
 
 
+def _get_user_input() -> str:
+    if config.VOICE_INPUT_ENABLED:
+        from voice_input import record_and_transcribe
+
+        text = record_and_transcribe().strip()
+        print(f"You (voice): {text}")
+        return text
+    return input("You: ").strip()
+
+
 def main():
     global _last_result
 
@@ -92,7 +102,7 @@ def main():
 
     try:
         while True:
-            user_message = input("You: ").strip()
+            user_message = _get_user_input()
             if not user_message:
                 continue
             if user_message.lower() == "exit":
