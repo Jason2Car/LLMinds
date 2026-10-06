@@ -18,7 +18,7 @@ def get_target_profile() -> dict:
 def get_search_settings() -> dict:
     weights = config.load_weights()
     return {
-        "tolerance": weights["tolerance"],
+        "tolerances": weights["tolerance"],  # dict: one tolerance per trait
         "max_iterations": weights["max_iterations"],
         "broad_search_deviation_threshold": weights["broad_search_deviation_threshold"],
     }

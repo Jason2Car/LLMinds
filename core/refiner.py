@@ -1,7 +1,8 @@
 """
-Stage 4: Response Refiner.
+Stage 4: Tone Notes Refiner.
 
-Uses a reward-based adaptive search analogous to CRISP's RAS algorithm:
+Instead of rewriting the response directly, revises the active archetype's
+tone_notes so the generator produces an on-target response. Uses a reward-based adaptive search analogous to CRISP's RAS algorithm:
 prompts the LLM to generate a revised candidate targeting the flagged
 trait deviation, to be re-scored by the Trait Evaluator by the caller.
 """
@@ -11,21 +12,27 @@ import llm_client
 import prompts
 
 
-def refine_response(
+def refine_tone_notes(
     background: dict,
     target_profile: dict,
     user_message: str,
     response_text: str,
     evaluation: dict,
+    broad_search_deviation_threshold: int,
+    conversation_history: list = None,
 ) -> str:
+    """Return revised tone_notes for the active archetype (not a rewritten response)."""
     flagged_trait = evaluation["worst_trait"]
     current_score = evaluation["scores"][flagged_trait]
     target_score = target_profile[flagged_trait]
 
-    search_settings_threshold = config.load_weights()["broad_search_deviation_threshold"]
-    broad_search = evaluation["worst_deviation"] > search_settings_threshold
+    # Broad vs. fine search width is now based on "excess" (how far the
+    # trait is over its OWN tolerance), not raw deviation from target --
+    # a trait with a wide tolerance can be far from target but still
+    # fine, so raw deviation alone would over-trigger broad rewrites.
+    broad_search = evaluation["worst_excess"] > broad_search_deviation_threshold
 
-    prompt = prompts.refiner_prompt(
+    prompt = prompts.tone_notes_refiner_prompt(
         background=background,
         target_profile=target_profile,
         user_message=user_message,
@@ -34,5 +41,6 @@ def refine_response(
         current_score=current_score,
         target_score=target_score,
         broad_search=broad_search,
+        conversation_history=conversation_history,
     )
     return llm_client.call(config.REFINER_MODEL, prompt, max_tokens=512).strip()
