@@ -9,6 +9,6 @@ four-stage design:
     orchestrator.py -- ties every stage together into the live loop
 """
 
-from .orchestrator import handle_user_message
+from .orchestrator import CrispSession
 
-__all__ = ["handle_user_message"]
+__all__ = ["CrispSession"]

@@ -19,7 +19,7 @@ import os
 from datetime import datetime, timezone
 
 import config
-from core import handle_user_message
+from core import CrispSession
 
 _last_result = None
 _log_file = None
@@ -58,7 +58,7 @@ def _log_turn(user_message: str, result: dict):
         "response": result["response"],
         "scores": result["scores"],
         "worst_trait": result["worst_trait"],
-        "worst_deviation": result["worst_deviation"],
+        "worst_excess": result["worst_excess"],
         "iterations_used": result["iterations_used"],
         "converged": result["converged"],
     }
@@ -97,6 +97,7 @@ def main():
     print(f"  Tolerance: {profile_data['tolerance']}, Max iterations: {profile_data['max_iterations']}")
 
     _init_log(args.profile)
+    session = CrispSession()
 
     print("\nType 'exit' to quit, 'scores' for last turn's trait breakdown.\n")
 
@@ -116,7 +117,7 @@ def main():
                         print(f"  {trait}: {score}")
                 continue
 
-            _last_result = handle_user_message(user_message)
+            _last_result = session.handle_user_message(user_message)
             _log_turn(user_message, _last_result)
             print(f"\nAssistant: {_last_result['response']}\n")
     finally:
