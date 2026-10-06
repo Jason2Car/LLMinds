@@ -111,3 +111,15 @@ def load_background(path: str | None = None) -> dict:
         path = _resolve_paths()[1]
     with open(path) as f:
         return json.load(f)
+
+
+def save_tone_notes(tone_notes: str, path: str | None = None) -> None:
+    """Overwrite tone_notes in the active profile's background.json."""
+    if path is None:
+        path = _resolve_paths()[1]
+    with open(path) as f:
+        background = json.load(f)
+    background["tone_notes"] = tone_notes
+    with open(path, "w") as f:
+        json.dump(background, f, indent=2)
+        f.write("\n")

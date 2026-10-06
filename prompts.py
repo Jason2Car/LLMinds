@@ -130,3 +130,57 @@ helpful for the user's request, and consistent with the conversation so
 far.
 
 Return ONLY the revised response text, no JSON, no explanation, no quotes."""
+
+
+def tone_notes_refiner_prompt(
+    background: dict,
+    target_profile: dict,
+    user_message: str,
+    response_text: str,
+    flagged_trait: str,
+    current_score: int,
+    target_score: int,
+    broad_search: bool,
+    conversation_history: list = None,
+) -> str:
+    direction = "increase" if target_score > current_score else "decrease"
+    magnitude = abs(target_score - current_score)
+    history_block = _format_history(conversation_history)
+
+    if broad_search:
+        width_instruction = (
+            "This is off by a large margin, so feel free to substantially "
+            "rewrite the tone notes."
+        )
+    else:
+        width_instruction = (
+            "This is close to the target, so make only a small, targeted "
+            "edit -- keep most of the existing wording."
+        )
+
+    return f"""You are tuning the "tone notes" of a persona for a research
+study on LLM personality conditioning. You are NOT endorsing the traits
+below -- you are adjusting instructions so generated samples match their
+intended research condition.
+
+Persona background: {background['backstory']}
+Current tone notes: {background['tone_notes']}
+
+Full target personality profile (0-100):
+{_format_profile(target_profile)}
+
+{history_block}The user's message this turn: "{user_message}"
+
+A response written with the current tone notes: "{response_text}"
+
+Evaluation found this response's {flagged_trait} score is {current_score}/100,
+but the target is {target_score}/100 -- the tone notes need to push the
+assistant to {direction} the expression of {flagged_trait} by about
+{magnitude} points.
+
+{width_instruction}
+
+Keep the notes' effect on the OTHER 7 traits roughly as they are, and keep
+the instruction that the assistant stays genuinely helpful.
+
+Return ONLY the revised tone notes text, no JSON, no explanation, no quotes."""

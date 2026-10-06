@@ -8,11 +8,13 @@ said before within that session, so multi-turn conversations don't lose
 context between messages.
 
 Each turn still runs the same per-message loop with no model weight
-updates: generate -> evaluate -> (if outside tolerance) refine ->
-re-evaluate -> repeat until within tolerance or max_iterations reached.
+updates: generate -> evaluate -> (if outside tolerance) refine tone notes ->
+regenerate -> re-evaluate -> repeat until within tolerance or max_iterations reached.
 """
 
 import logging
+
+import config
 
 from . import evaluator, generator, profile, refiner
 
@@ -55,7 +57,7 @@ class CrispSession:
                     f"exceeds its tolerance by {evaluation['worst_excess']} points -- refining."
                 )
 
-            response_text = refiner.refine_response(
+            new_tone_notes = refiner.refine_tone_notes(
                 self.background,
                 self.target_profile,
                 user_message,
@@ -63,6 +65,13 @@ class CrispSession:
                 evaluation,
                 self.settings["broad_search_deviation_threshold"],
                 self.history,
+            )
+            # Persist to the active archetype's background.json, then
+            # regenerate the response under the updated tone notes.
+            config.save_tone_notes(new_tone_notes)
+            self.background["tone_notes"] = new_tone_notes
+            response_text = generator.generate_response(
+                self.background, self.target_profile, user_message, self.history
             )
             evaluation = evaluator.evaluate_response(self.target_profile, tolerances, response_text)
 
