@@ -19,7 +19,7 @@ import os
 from datetime import datetime, timezone
 
 import config
-from core import CrispSession
+from core import CrispSession, interviewer
 
 _last_result = None
 _log_file = None
@@ -76,6 +76,41 @@ def _get_user_input() -> str:
     return input("You: ").strip()
 
 
+def run_interview(session, target: dict, max_turns: int):
+    min_turns = min(config.INTERVIEW_MIN_TURNS, max_turns)
+    transcript, turn_results = [], []
+    print(f"\nInterview mode: {min_turns}-{max_turns} turns.\n")
+
+    for turn in range(max_turns):
+        question = interviewer.next_question(
+            session.background, transcript, turn, min_turns, max_turns
+        )
+        if question is None:
+            print("(interviewer ended the interview)")
+            break
+        print(f"Interviewer: {question}")
+        result = session.handle_user_message(question)
+        _log_turn(question, result)
+        print(f"\nAssistant: {result['response']}\n")
+        transcript.append({"role": "user", "content": question})
+        transcript.append({"role": "assistant", "content": result["response"]})
+        turn_results.append(result)
+
+    if not turn_results:
+        return
+    grade = interviewer.grade_interview(target, transcript, turn_results)
+    print("=== Interview grade ===")
+    print(f"Turns: {grade['turns']}  (converged on {grade['converged_turns']})")
+    print(f"Mean abs deviation from target: {grade['mean_abs_deviation']:.1f}")
+    for trait in target:
+        print(f"  {trait}: {grade['mean_scores'][trait]:.0f} (target {target[trait]})")
+    for key, value in grade["holistic"].items():
+        print(f"  {key}: {value}")
+    if _log_file:
+        _log_file.write(json.dumps({"type": "interview_grade", **grade}) + "\n")
+        _log_file.flush()
+
+
 def main():
     global _last_result
 
@@ -85,6 +120,17 @@ def main():
         choices=config.AVAILABLE_PROFILES,
         required=True,
         help="Personality profile to use: narcissistic, machiavellian, psychopathic, or baseline",
+    )
+    parser.add_argument(
+        "--interview",
+        action="store_true",
+        help="Let an LLM interviewer play the user, then grade the conversation",
+    )
+    parser.add_argument(
+        "--max-turns",
+        type=int,
+        default=config.INTERVIEW_MAX_TURNS,
+        help="Hard cap on interview turns (interview mode only)",
     )
     args = parser.parse_args()
 
@@ -98,6 +144,14 @@ def main():
 
     _init_log(args.profile)
     session = CrispSession()
+
+    if args.interview:
+        try:
+            run_interview(session, target, args.max_turns)
+        finally:
+            if _log_file:
+                _log_file.close()
+        return
 
     print("\nType 'exit' to quit, 'scores' for last turn's trait breakdown.\n")
 

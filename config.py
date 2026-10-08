@@ -62,6 +62,13 @@ TRAIT_DIMENSIONS = [
 GENERATOR_MODEL = "gpt-4o"
 EVALUATOR_MODEL = "gpt-4o"
 REFINER_MODEL = "gpt-4o"
+INTERVIEWER_MODEL = "gpt-4o"
+GRADER_MODEL = "gpt-4o"
+
+# Interview mode: the interviewer always asks MIN_TURNS questions, may end
+# early (after that) once it has seen enough, and is cut off at MAX_TURNS.
+INTERVIEW_MIN_TURNS = 5
+INTERVIEW_MAX_TURNS = 10
 
 
 def set_profile(name: str) -> None:

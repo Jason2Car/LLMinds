@@ -40,7 +40,7 @@ attempting that.
 ## Run
 
 ```bash
-python app.py
+python app.py --profile narcissistic   # or machiavellian, psychopathic, baseline
 ```
 
 Type messages as if you were the participant; the assistant generates and
@@ -49,6 +49,43 @@ remembered turn to turn (via `CrispSession`), so you can reference
 earlier messages. Type `scores` after any turn to see the full 8-trait
 breakdown, whether each trait is within its own tolerance, and whether
 the turn converged. Type `exit` to quit.
+
+### Interview mode
+
+```bash
+python app.py --profile psychopathic --interview [--max-turns 10]
+```
+
+Instead of you typing, an LLM **interviewer** plays the user and talks to
+the archetype. When the interview ends, the archetype's replies are
+graded as a whole. Without `--interview`, the typed (or voice) mode works
+as before.
+
+- **Interviewer** (`core/interviewer.py`): sees only the archetype's role,
+  not its traits, and is prompted to vary its behavior -- ask for help,
+  make mistakes, get confused or frustrated, push back, ask follow-ups.
+  Each question goes through the same `CrispSession` loop as a typed
+  message, including the tone-notes refinement.
+- **When it stops**: a hybrid cutoff. The interviewer always asks at
+  least `INTERVIEW_MIN_TURNS` (5) questions, may end early after that by
+  replying `[END_INTERVIEW]` once it has seen enough, and is hard-stopped
+  at `INTERVIEW_MAX_TURNS` (10, or `--max-turns`). Both limits live in
+  `config.py`. Each turn can trigger up to `max_iterations` refinement
+  rounds, so the cap also bounds cost. For a study comparing archetypes,
+  set min equal to max (e.g. 8) so every archetype gets the same amount
+  of interview; the LLM-chosen early end varies a lot between runs. An
+  alternative not implemented is stopping once the running per-trait mean
+  moves less than ~3 points for 2 turns.
+- **Grading**: printed at the end and written to the session log as an
+  `interview_grade` record. It has two parts:
+  - *Per-trait scores*: the mean evaluator score per trait vs. the
+    target, the mean absolute deviation, and how many turns converged.
+  - *Overall grade*: a grader LLM scores profile fidelity, consistency,
+    naturalness and helpfulness (0-10 each) with a short summary.
+- **Tone notes persist**: refinement rewrites `tone_notes` in the active
+  profile's `background.json` (see below), so a second interview of the
+  same archetype starts from already-tuned notes, which can skew
+  comparisons. Reset between runs with `git checkout config/profiles`.
 
 ### Voice input (optional)
 
@@ -73,8 +110,14 @@ and `exit` still work as spoken commands. Leave `VOICE_INPUT` unset or
 
 ## Files
 
+- `config/profiles/<name>/` -- one folder per archetype (`narcissistic`,
+  `machiavellian`, `psychopathic`, `baseline`), each with its own
+  `weights.json` and `background.json`; `--profile` picks one. The
+  top-level `config/weights.json` and `config/background.json` are the
+  fallback when no profile is selected. Descriptions below apply to each.
 - `config/weights.json` -- the target trait vector T (0-100 for each of
-  the 8 traits) and **per-trait** allowed variance: `tolerance` is now an
+  the 8 traits) and **per-trait** allowed variance: `tolerance` is either a
+  single number applied to every trait (what the profiles use) or an
   object with one value per trait (some traits can be allowed to vary
   more than others -- e.g. loosen Big-5 traits you don't care as much
   about, tighten the Dark Triad traits that are your actual manipulation
@@ -85,9 +128,11 @@ and `exit` still work as spoken commands. Leave `VOICE_INPUT` unset or
   matching is per trait.**
 - `config/background.json` -- the persona backstory and tone notes, kept
   in a separate file from the weights so you can vary either
-  independently.
+  independently. **`tone_notes` is rewritten automatically by the
+  refinement loop** (see "How one turn works").
 - `config.py` -- loads both config files; also holds which model plays
-  each role (generator/evaluator/refiner) and the 8 trait dimension names.
+  each role (generator/evaluator/refiner/interviewer/grader), the interview
+  turn limits, `save_tone_notes()`, and the 8 trait dimension names.
 - `config.env.example` -- copy to `config.env` and fill in your real API key.
 - `llm_client.py` -- thin OpenAI API wrapper, reads the key from `config.env`;
   also exposes `transcribe()` for Whisper audio transcription.
@@ -99,7 +144,8 @@ and `exit` still work as spoken commands. Leave `VOICE_INPUT` unset or
   - `profile.py` -- Trait Profile Specification (loads T from weights.json)
   - `generator.py` -- Response Generator
   - `evaluator.py` -- Trait Evaluator (scores all 8 dimensions, finds worst deviation)
-  - `refiner.py` -- Response Refiner (reward-based adaptive search on the flagged trait)
+  - `refiner.py` -- Tone Notes Refiner (reward-based adaptive search on the flagged trait)
+  - `interviewer.py` -- LLM interviewer and end-of-interview grader (`--interview`)
   - `orchestrator.py` -- ties every stage into the live per-turn loop
 
 ## How one turn works
@@ -116,13 +162,16 @@ and `exit` still work as spoken commands. Leave `VOICE_INPUT` unset or
    the one with the biggest raw gap, since a loosely-toleranced trait can
    be far from target but still fine.
 3. If every trait's excess is <= 0, the response is returned as-is.
-4. Otherwise, `refiner.py` rewrites the response, targeting specifically
-   the worst-excess trait -- a broad rewrite if the excess is large
-   (above `broad_search_deviation_threshold`), a small targeted tweak if
-   it's close to passing.
-5. The revised response goes back through the evaluator. This repeats
+4. Otherwise, `refiner.py` does **not** rewrite the response. It rewrites
+   the archetype's **tone notes**, targeting specifically the
+   worst-excess trait -- a broad rewrite of the notes if the excess is
+   large (above `broad_search_deviation_threshold`), a small targeted
+   edit if it's close to passing. The new notes are saved to the active
+   profile's `background.json` (`config.save_tone_notes`), and the
+   generator then produces a fresh response under them.
+5. The new response goes back through the evaluator. This repeats
    until every trait's excess is <= 0, or `max_iterations` is reached,
-   whichever comes first -- at which point the best attempt found
+   whichever comes first -- at which point the best response found
    (lowest worst-trait excess) is returned.
 6. The user's message and the final response are appended to the
    session's history, so the next turn's generation and refinement
@@ -151,6 +200,13 @@ duration.
 | Trait Evaluator | `core/evaluator.py` |
 | Response Refiner (RAS) | `core/refiner.py`, looped by `core/orchestrator.py` |
 
+## Logging
+
+Every conversation is logged to `logs/<profile>/<timestamp>.jsonl`: a
+`session_start` record, one `turn` record per message (user message,
+final response, scores, worst trait and excess, iterations, convergence),
+and in interview mode a final `interview_grade` record.
+
 ## Note on experimental conditions
 
 This code implements the **Dark Triad-Conditioned** condition from
@@ -169,8 +225,6 @@ base model and interface.
   a short assembly task, but worth adding a max-turns window or
   summarization step if a session runs very long, since every turn's
   prompt re-sends the full history so far.
-- No logging of transcripts/scores to a file for the study itself --
-  right now results only print to the console. Worth adding structured
-  per-session logging before running real participants, since your
-  proposal's Section IV-C requires full conversation transcripts to be
-  captured.
+- No in-memory-only mode for tone-note edits -- they are always written
+  to the profile's `background.json`. A flag to keep them in memory would
+  keep repeated runs comparable.

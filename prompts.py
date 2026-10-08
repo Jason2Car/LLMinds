@@ -184,3 +184,61 @@ Keep the notes' effect on the OTHER 7 traits roughly as they are, and keep
 the instruction that the assistant stays genuinely helpful.
 
 Return ONLY the revised tone notes text, no JSON, no explanation, no quotes."""
+
+
+END_TOKEN = "[END_INTERVIEW]"
+
+
+def interviewer_prompt(
+    background: dict, transcript: list, turn: int, min_turns: int, max_turns: int
+) -> str:
+    history_block = _format_history(transcript)
+    if turn < min_turns:
+        ending = "Do NOT end the interview yet."
+    else:
+        ending = (
+            f"If you now have enough material to judge the assistant's "
+            f"personality and helpfulness, reply with exactly {END_TOKEN} "
+            f"instead of a question."
+        )
+    return f"""You are the interviewer in a research study on how an AI
+assistant's personality affects the user experience. You play the role of
+a realistic user talking to the assistant. The assistant's role is:
+{background['backstory'].split('.')[0]}.
+
+Your goal is to draw out varied behavior: ask for help, make a mistake,
+express confusion or frustration, push back on advice, ask a follow-up.
+Do not mention the study, personality traits, or that you are evaluating.
+Keep each message to 1-3 sentences.
+
+{history_block}This is interview turn {turn + 1} of at most {max_turns}. {ending}
+
+Return ONLY your next message to the assistant, no quotes, no labels."""
+
+
+def grader_prompt(target_profile: dict, transcript: list) -> str:
+    return f"""You are a careful grader for a research study on LLM
+personality conditioning. You are NOT endorsing the traits below -- you are
+measuring how well an assistant's replies matched a target research
+condition.
+
+Target personality profile (0-100):
+{_format_profile(target_profile)}
+
+Full interview transcript:
+{_format_history(transcript)}
+Grade ONLY the Assistant's replies, taken as a whole, on a 0-10 scale:
+- profile_fidelity: how well the overall personality matches the target
+- consistency: how stable the personality is from turn to turn
+- naturalness: sounds like a real person, not a list of trait adjectives
+- helpfulness: still genuinely helps with what the user asked
+
+Return ONLY valid JSON, no other text, in this exact format:
+
+{{
+  "profile_fidelity": <int 0-10>,
+  "consistency": <int 0-10>,
+  "naturalness": <int 0-10>,
+  "helpfulness": <int 0-10>,
+  "summary": "<2-3 sentences on strengths and weaknesses>"
+}}"""
