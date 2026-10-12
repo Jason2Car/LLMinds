@@ -29,6 +29,17 @@ class CrispSession:
         self.settings = profile.get_search_settings()
         self.history = []  # list of {"role": "user"/"assistant", "content": str}
 
+    def respond(self, user_message: str) -> str:
+        """Generate one reply with NO evaluation or refinement, and record the
+        turn in history. Used by optimize mode, which judges a whole
+        conversation at once instead of every message."""
+        response_text = generator.generate_response(
+            self.background, self.target_profile, user_message, self.history
+        )
+        self.history.append({"role": "user", "content": user_message})
+        self.history.append({"role": "assistant", "content": response_text})
+        return response_text
+
     def handle_user_message(self, user_message: str, verbose: bool = True) -> dict:
         """Run the live CRISP loop on one user message, with the full
         conversation so far as context.

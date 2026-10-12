@@ -87,6 +87,41 @@ as before.
   same archetype starts from already-tuned notes, which can skew
   comparisons. Reset between runs with `git checkout config/profiles`.
 
+### Optimize mode (tune tone notes until no waiting)
+
+```bash
+python app.py --profile psychopathic --optimize \
+    [--exchanges 5] [--stable-rounds 2] [--max-rounds 10]
+```
+
+Repeats short interviews to tune `tone_notes`. Each round:
+1. The LLM interviewer and the archetype exchange `--exchanges` (default 5)
+   question/response pairs. **No per-message evaluation or refinement** --
+   one message doesn't show a whole personality, and skipping it makes
+   rounds fast.
+2. The assistant's replies are evaluated together, once, on all 8 traits.
+3. If any trait is outside its tolerance, the tone notes are refined
+   **once** (and saved to the profile's `background.json`). Otherwise
+   nothing changes.
+
+It stops after `--stable-rounds` (default 2) passing interviews in a row,
+so the notes need no tuning to hit the target on fresh conversations, or
+after `--max-rounds` (default 10).
+
+Caveats:
+- The generator, evaluator and interviewer are all stochastic, so one
+  passing interview can be luck; hence consecutive passes, and a fresh
+  interviewer (different questions) each round to avoid overfitting.
+- Nothing guarantees the LLM edits the notes in the right direction. If it
+  doesn't stabilize, the starting notes of the best round (lowest worst
+  excess) are restored.
+- Rewrites can bloat the notes or drop the "stay genuinely helpful"
+  instruction. Each round's transcript, scores and start/end notes are
+  logged as `optimize_round` records; check them, and use `git checkout
+  config/profiles` to reset.
+- Passing means the *evaluator* is satisfied, not that a human finds the
+  persona convincing. Follow up with a graded `--interview` run.
+
 ### Voice input (optional)
 
 Instead of typing, you can speak each turn and have it transcribed with

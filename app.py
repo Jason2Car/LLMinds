@@ -19,7 +19,7 @@ import os
 from datetime import datetime, timezone
 
 import config
-from core import CrispSession, interviewer
+from core import CrispSession, evaluator, interviewer, profile, refiner
 
 _last_result = None
 _log_file = None
@@ -111,6 +111,94 @@ def run_interview(session, target: dict, max_turns: int):
         _log_file.flush()
 
 
+def _format_transcript(transcript: list) -> str:
+    return "\n".join(
+        f"{'User' if t['role'] == 'user' else 'Assistant'}: {t['content']}" for t in transcript
+    )
+
+
+def run_optimize(target: dict, exchanges: int, stable_rounds: int, max_rounds: int):
+    """Repeat fixed-length interviews, refining tone_notes once per interview.
+
+    Each round: an LLM interviewer and the archetype exchange `exchanges`
+    question/response pairs with NO per-message evaluation or refinement
+    (a single message doesn't show a whole personality). The assistant's
+    replies are then evaluated together once; if any trait is outside its
+    tolerance, tone_notes are refined once. Stops after `stable_rounds`
+    consecutive passing interviews, or after `max_rounds`, in which case
+    the best round's starting notes are restored.
+    """
+    settings = profile.get_search_settings()
+    tolerances = settings["tolerances"]
+    original = config.load_background()["tone_notes"]
+    print(f"\nOptimize mode: {exchanges} exchanges per interview, one evaluation and "
+          f"at most one refinement per interview; need {stable_rounds} passing "
+          f"interview(s) in a row (max {max_rounds} rounds).")
+    print(f"Original tone notes:\n  {original}\n")
+
+    best = None  # (worst_excess, round, starting notes)
+    streak = 0
+    for rnd in range(1, max_rounds + 1):
+        start_notes = config.load_background()["tone_notes"]
+        session = CrispSession()  # fresh history; reads current notes from disk
+        print(f"\n########## Round {rnd} ##########")
+        transcript = []
+        for turn in range(exchanges):
+            question = interviewer.next_question(
+                session.background, transcript, turn, exchanges, exchanges
+            )
+            if question is None:
+                break
+            print(f"Interviewer: {question}")
+            reply = session.respond(question)
+            print(f"\nAssistant: {reply}\n")
+            transcript.append({"role": "user", "content": question})
+            transcript.append({"role": "assistant", "content": reply})
+        if not transcript:
+            continue
+
+        replies = "\n\n".join(t["content"] for t in transcript if t["role"] == "assistant")
+        evaluation = evaluator.evaluate_response(target, tolerances, replies)
+        passed = evaluator.within_tolerance(evaluation)
+        streak = streak + 1 if passed else 0
+        print(f"Round {rnd}: scores {evaluation['scores']}")
+        print(f"Round {rnd}: worst trait '{evaluation['worst_trait']}', excess "
+              f"{evaluation['worst_excess']} -> {'PASS' if passed else 'fail'} "
+              f"(streak {streak}/{stable_rounds})")
+
+        if not passed:
+            new_notes = refiner.refine_tone_notes(
+                session.background, target,
+                "(multi-turn interview; full transcript below)",
+                _format_transcript(transcript), evaluation,
+                settings["broad_search_deviation_threshold"], None,
+            )
+            config.save_tone_notes(new_notes)
+            print(f"Refined tone notes:\n  {new_notes}")
+
+        if _log_file:
+            _log_file.write(json.dumps({
+                "type": "optimize_round", "round": rnd, "transcript": transcript,
+                "scores": evaluation["scores"], "worst_trait": evaluation["worst_trait"],
+                "worst_excess": evaluation["worst_excess"], "passed": passed,
+                "streak": streak, "start_tone_notes": start_notes,
+                "end_tone_notes": config.load_background()["tone_notes"],
+            }) + "\n")
+            _log_file.flush()
+
+        if best is None or evaluation["worst_excess"] < best[0]:
+            best = (evaluation["worst_excess"], rnd, start_notes)
+        if streak >= stable_rounds:
+            print(f"\nStable after {rnd} round(s). Final tone notes:\n  "
+                  f"{config.load_background()['tone_notes']}")
+            return
+
+    excess, rnd, notes = best
+    config.save_tone_notes(notes)
+    print(f"\nDid not stabilize in {max_rounds} rounds. Restored the starting notes "
+          f"of the best round (round {rnd}, worst excess {excess}):\n  {notes}")
+
+
 def main():
     global _last_result
 
@@ -132,6 +220,17 @@ def main():
         default=config.INTERVIEW_MAX_TURNS,
         help="Hard cap on interview turns (interview mode only)",
     )
+    parser.add_argument(
+        "--optimize",
+        action="store_true",
+        help="Repeat short interviews, refining tone notes once per interview, until stable",
+    )
+    parser.add_argument("--exchanges", type=int, default=5,
+                        help="Optimize: question/response pairs per interview (default 5)")
+    parser.add_argument("--stable-rounds", type=int, default=2,
+                        help="Optimize: consecutive passing interviews required (default 2)")
+    parser.add_argument("--max-rounds", type=int, default=10,
+                        help="Optimize: give up after this many interviews (default 10)")
     args = parser.parse_args()
 
     config.set_profile(args.profile)
@@ -144,6 +243,14 @@ def main():
 
     _init_log(args.profile)
     session = CrispSession()
+
+    if args.optimize:
+        try:
+            run_optimize(target, args.exchanges, args.stable_rounds, args.max_rounds)
+        finally:
+            if _log_file:
+                _log_file.close()
+        return
 
     if args.interview:
         try:
