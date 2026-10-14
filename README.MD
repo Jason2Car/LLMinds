@@ -12,7 +12,39 @@ pip install "openai<2"
 cp config.env.example config.env
 # edit config.env and paste in your real key:
 #   API_KEY=your_key_here
+
+# local persona model (see "Models" below)
+ollama pull dolphin3
+ollama serve        # if the Ollama app isn't already running
 ```
+
+### Models
+
+Each role in the loop has its own model, set in `config.py`:
+
+| Role | Default | Where it runs |
+|---|---|---|
+| Generator (speaks as the persona) | `ollama/dolphin3` | local, via Ollama |
+| Refiner (rewrites `tone_notes`) | `ollama/dolphin3` | local, via Ollama |
+| Evaluator (scores the 8 traits, 0-100) | `ollama/dolphin3` | local, via Ollama |
+| Interviewer (plays the user) | `gpt-4o` | OpenAI |
+| Grader (end-of-interview grade) | `gpt-4o` | OpenAI |
+| Whisper (voice input, optional) | `whisper-1` | OpenAI |
+
+A model name starting with `ollama/` is sent to Ollama's OpenAI-compatible
+endpoint (`http://localhost:11434/v1` by default; override with
+`OLLAMA_URL` in `config.env`). Any other name goes to OpenAI. To move a
+role, change its `*_MODEL` line in `config.py`. `API_KEY` is only read the
+first time an OpenAI-backed role is called, so a setup with every role on
+Ollama needs no key.
+
+Caveat: in testing, Dolphin 3 (8B) as evaluator tended to give saturated
+scores (traits at 0 or 100), which can make the refiner chase noise. If
+trait scores look extreme, set `EVALUATOR_MODEL = "gpt-4o"` in `config.py`.
+
+If you run `app.py` with a Python that lacks `openai`, you'll get
+`ModuleNotFoundError: No module named 'openai'` -- install the package
+into the interpreter you actually use.
 
 **Important -- pin the `openai` package below v2.** As of late 2026, the
 `openai` Python library had a major rewrite (v2 and v3) that switched its
@@ -168,9 +200,12 @@ and `exit` still work as spoken commands. Leave `VOICE_INPUT` unset or
 - `config.py` -- loads both config files; also holds which model plays
   each role (generator/evaluator/refiner/interviewer/grader), the interview
   turn limits, `save_tone_notes()`, and the 8 trait dimension names.
-- `config.env.example` -- copy to `config.env` and fill in your real API key.
-- `llm_client.py` -- thin OpenAI API wrapper, reads the key from `config.env`;
-  also exposes `transcribe()` for Whisper audio transcription.
+- `config.env.example` -- copy to `config.env` and fill in your real API key
+  (and optionally `OLLAMA_URL`).
+- `llm_client.py` -- thin LLM wrapper: routes `ollama/<name>` models to the
+  local Ollama server and everything else to OpenAI (key read from
+  `config.env` on first use); also exposes `transcribe()` for Whisper
+  audio transcription.
 - `voice_input.py` -- records from the microphone and transcribes with
   Whisper, used by `app.py` when `VOICE_INPUT=true`.
 - `prompts.py` -- every prompt template used by the loop.
