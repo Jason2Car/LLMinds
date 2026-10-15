@@ -26,7 +26,7 @@ Each role in the loop has its own model, set in `config.py`:
 |---|---|---|
 | Generator (speaks as the persona) | `ollama/dolphin3` | local, via Ollama |
 | Refiner (rewrites `tone_notes`) | `ollama/dolphin3` | local, via Ollama |
-| Evaluator (scores the 8 traits, 0-100) | `ollama/dolphin3` | local, via Ollama |
+| Evaluator (scores the 8 traits, 0-100) | `gpt-4o` | OpenAI |
 | Interviewer (plays the user) | `gpt-4o` | OpenAI |
 | Grader (end-of-interview grade) | `gpt-4o` | OpenAI |
 | Whisper (voice input, optional) | `whisper-1` | OpenAI |
@@ -38,9 +38,10 @@ role, change its `*_MODEL` line in `config.py`. `API_KEY` is only read the
 first time an OpenAI-backed role is called, so a setup with every role on
 Ollama needs no key.
 
-Caveat: in testing, Dolphin 3 (8B) as evaluator tended to give saturated
-scores (traits at 0 or 100), which can make the refiner chase noise. If
-trait scores look extreme, set `EVALUATOR_MODEL = "gpt-4o"` in `config.py`.
+The evaluator is on OpenAI because Dolphin 3 (8B) as evaluator gave
+degenerate scores (e.g. seven traits at 0 and one at 90), which made the
+refiner chase noise. `gpt-4o` also rates rude text more harshly than
+Dolphin does, so keep the evaluator the same across runs you compare.
 
 If you run `app.py` with a Python that lacks `openai`, you'll get
 `ModuleNotFoundError: No module named 'openai'` -- install the package

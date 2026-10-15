@@ -62,7 +62,7 @@ TRAIT_DIMENSIONS = [
 # All roles run locally via Ollama (`ollama pull dolphin3`). Use "gpt-4o" to
 # send a role to OpenAI instead (requires API_KEY in config.env).
 GENERATOR_MODEL = "ollama/dolphin3"
-EVALUATOR_MODEL = "ollama/dolphin3"
+EVALUATOR_MODEL = "gpt-4o"
 REFINER_MODEL = "ollama/dolphin3"
 INTERVIEWER_MODEL = "gpt-4o"
 GRADER_MODEL = "gpt-4o"
