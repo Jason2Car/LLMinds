@@ -9,7 +9,16 @@
     "machiavellianism": 30,
     "psychopathy": 85
   },
-  "tolerance": 10,
+  "tolerance": {
+    "openness": 20,
+    "conscientiousness": 35,
+    "extraversion": 20,
+    "agreeableness": 15,
+    "neuroticism": 20,
+    "narcissism": 25,
+    "machiavellianism": 25,
+    "psychopathy": 10
+  },
   "max_iterations": 6,
   "broad_search_deviation_threshold": 30
 }

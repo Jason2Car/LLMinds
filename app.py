@@ -2,13 +2,14 @@
 Interactive CLI for the live CRISP-conditioned assistant.
 
 Usage:
-    python app.py --profile narcissistic
-    python app.py --profile machiavellian
-    python app.py --profile psychopathic
-    python app.py --profile baseline
+    python app.py --profile narcissistic                  # CRISP loop every message
+    python app.py --profile narcissistic --optimize       # calibrate tone_notes via interviews
+    python app.py --profile narcissistic --live            # production mode: no CRISP loop,
+                                                          #   just the calibrated tone_notes
 
-Type a message and press enter. Type 'exit' to quit. Type 'scores' after
-any response to see the last turn's full 8-trait score breakdown.
+Workflow:
+    1. Run --optimize first to calibrate the tone_notes for a profile
+    2. Run --live for participants to talk to the calibrated model (single API call, no loop)
 
 All conversations are automatically logged to logs/<profile>/<timestamp>.jsonl
 """
@@ -231,6 +232,12 @@ def main():
                         help="Optimize: consecutive passing interviews required (default 2)")
     parser.add_argument("--max-rounds", type=int, default=10,
                         help="Optimize: give up after this many interviews (default 10)")
+    parser.add_argument(
+        "--live",
+        action="store_true",
+        help="Production mode: skip the CRISP loop entirely, use the calibrated "
+             "tone_notes as-is. Run --optimize first to calibrate.",
+    )
     args = parser.parse_args()
 
     config.set_profile(args.profile)
@@ -255,6 +262,33 @@ def main():
     if args.interview:
         try:
             run_interview(session, target, args.max_turns)
+        finally:
+            if _log_file:
+                _log_file.close()
+        return
+
+    if args.live:
+        print("\n[LIVE MODE] No CRISP loop — using calibrated tone_notes directly.")
+        print("  Run --optimize first if you haven't calibrated this profile yet.")
+        print("\nType 'exit' to quit.\n")
+        try:
+            while True:
+                user_message = _get_user_input()
+                if not user_message:
+                    continue
+                if user_message.lower() == "exit":
+                    break
+
+                response = session.respond(user_message)
+                _log_turn(user_message, {
+                    "response": response,
+                    "scores": {},
+                    "worst_trait": None,
+                    "worst_excess": None,
+                    "iterations_used": 0,
+                    "converged": True,
+                })
+                print(f"\nAssistant: {response}\n")
         finally:
             if _log_file:
                 _log_file.close()
