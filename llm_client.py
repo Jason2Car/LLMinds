@@ -7,8 +7,8 @@ Ollama's OpenAI-compatible endpoint (OLLAMA_URL in config.env, default
 http://localhost:11434/v1); everything else goes to OpenAI.
 
 Requires: pip install openai
-Reads the API key from config.env (in this same directory), which should
-contain a single line:
+Reads the API key from the API_KEY environment variable if set, otherwise
+from config.env (in this same directory), which should contain a single line:
 
     API_KEY=your_key_here
 """
@@ -25,6 +25,9 @@ _ENV_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.env
 
 
 def _load_api_key(path: str = _ENV_FILE) -> str:
+    # A hosted deployment supplies the key as an environment variable.
+    if os.environ.get("API_KEY"):
+        return os.environ["API_KEY"].strip()
     if not os.path.exists(path):
         raise FileNotFoundError(
             f"Could not find {path}. Create a config.env file next to this "

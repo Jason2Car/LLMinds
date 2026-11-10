@@ -1,0 +1,22 @@
+body { font-family: system-ui, sans-serif; background: #10141c; color: #e8ecf3; margin: 0; }
+main { max-width: 640px; margin: 0 auto; padding: 24px 16px 64px; }
+h1 { margin-bottom: 4px; }
+.hint { color: #8b95a8; font-size: 14px; }
+button { background: #4c7dff; color: #fff; border: 0; border-radius: 6px; padding: 8px 14px; cursor: pointer; font-size: 14px; }
+button:hover { background: #3a68e6; }
+#rank-list { padding: 0; list-style-position: inside; }
+#rank-list li { display: flex; align-items: center; gap: 8px; background: #1b2230; border-radius: 6px; padding: 8px 12px; margin: 4px 0; cursor: grab; }
+#rank-list li.dragging { opacity: 0.4; }
+#rank-list .name { flex: 1; }
+#rank-list .arrows button { padding: 2px 8px; background: #2c364a; }
+#chat-log { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.msg { padding: 10px 12px; border-radius: 8px; max-width: 85%; white-space: pre-wrap; }
+.msg.assistant { background: #1b2230; align-self: flex-start; }
+.msg.user { background: #2b4aa8; align-self: flex-end; }
+#chat-form { display: flex; gap: 8px; margin-bottom: 12px; }
+#chat-input { flex: 1; padding: 8px; border-radius: 6px; border: 1px solid #2c364a; background: #1b2230; color: inherit; }
+#chat-done { background: #2c364a; }
+#scale { display: flex; gap: 8px; }
+#scale button { flex: 1; padding: 14px 0; font-size: 18px; }
+.error { color: #ff7b7b; }
+label { display: block; margin: 12px 0; }

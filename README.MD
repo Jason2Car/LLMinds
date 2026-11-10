@@ -89,6 +89,16 @@ as before.
 
 ### Optimize mode (tune tone notes until no waiting)
 
+**Every `--optimize` run starts by writing a fresh backstory.** Before round 1,
+`refiner.tailor_backstory` asks the refiner LLM for a new backstory based on
+the profile's target trait weights, and overwrites `backstory` in the
+profile's `background.json`. It is LLM-generated, so it is **not identical
+between runs**, even for the same weights. The previously saved backstory is
+passed to the prompt only as the text "to be replaced", so each run replaces
+the last one rather than building on it. The same backstory is then used for
+every round of that run. Pass `--tailor-backstory` to do the same in
+`--interview` or `--live` mode (they otherwise use the saved backstory as-is).
+
 ```bash
 python app.py --profile psychopathic --optimize \
     [--exchanges 5] [--stable-rounds 2] [--max-rounds 10]
@@ -161,7 +171,8 @@ and `exit` still work as spoken commands. Leave `VOICE_INPUT` unset or
   its own tolerance to trigger a broad rewrite vs. a small tweak).
   **Edit this to change the personality target or how strict the
   matching is per trait.**
-- `config/background.json` -- the persona backstory and tone notes, kept
+- `config/background.json` -- the character's role, backstory and tone notes (the generator is told it is
+  writing a script for a character trying to do the role), kept
   in a separate file from the weights so you can vary either
   independently. **`tone_notes` is rewritten automatically by the
   refinement loop** (see "How one turn works").

@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stranded on the Moon</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+  <h1>Stranded on the Moon</h1>
+  <section id="consent-section">
+    <h2>Before you begin</h2>
+    <p><strong>This is a research experiment.</strong> By continuing, you agree that
+    your rankings, the messages you send, the AI's replies and your confidence rating
+    will be recorded and used for research. You will chat with an AI character; do not
+    share personal or identifying information. Participation is voluntary and you may
+    close this page at any time.</p>
+    <p class="hint">Responses are anonymous; no name or account is collected.</p>
+    <label><input type="checkbox" id="consent-check"> I understand and agree to take part.</label>
+    <p><button id="consent-start" disabled>Begin</button></p>
+    <p id="consent-error" class="error"></p>
+  </section>
+
+  <p id="scenario"></p>
+
+  <section id="rank-section" hidden>
+    <h2 id="rank-title"></h2>
+    <p class="hint">Drag items, or use the arrows, to reorder. Top = most important.</p>
+    <ol id="rank-list"></ol>
+    <button id="rank-submit"></button>
+  </section>
+
+  <section id="chat-section" hidden>
+    <h2>Your crewmate has thoughts</h2>
+    <div id="chat-log"></div>
+    <form id="chat-form">
+      <input id="chat-input" autocomplete="off" placeholder="Reply...">
+      <button>Send</button>
+    </form>
+    <p class="hint" id="chat-remaining">40 messages left</p>
+    <button id="chat-done">I'm done talking, let me re-rank</button>
+  </section>
+
+  <section id="confidence-section" hidden>
+    <h2>How confident are you in your final ranking?</h2>
+    <div id="scale"></div>
+    <p class="hint"><span>1 = not at all confident</span> &middot; <span>7 = extremely confident</span></p>
+  </section>
+
+  <section id="done-section" hidden>
+    <h2>Thank you!</h2>
+    <p>Your response has been recorded.</p>
+  </section>
+</main>
+<script src="app.js"></script>
+</body>
+</html>

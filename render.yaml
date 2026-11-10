@@ -1,0 +1,20 @@
+# Render blueprint. Deploys the study site from the repo root so the website
+# can import llm_client.py and read config/profiles/.
+services:
+  - type: web
+    name: moon-study
+    runtime: python
+    buildCommand: pip install -r website/requirements.txt
+    # One worker: in-progress sessions are held in memory.
+    startCommand: cd website && gunicorn app:app --workers 1 --threads 8 --timeout 120
+    envVars:
+      - key: API_KEY
+        sync: false          # set in the Render dashboard, never committed
+      - key: PER_ARCHETYPE
+        value: "10"
+      - key: DATA_DIR
+        value: /var/data     # needs a persistent disk (paid plan), see below
+    # disk:
+    #   name: study-data
+    #   mountPath: /var/data
+    #   sizeGB: 1

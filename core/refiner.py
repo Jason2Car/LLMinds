@@ -1,6 +1,9 @@
 """
 Stage 4: Tone Notes Refiner.
 
+Also tailors the character's backstory to the target trait weights once,
+at the beginning of a run (tailor_backstory), instead of the generic one.
+
 Instead of rewriting the response directly, revises the active archetype's
 tone_notes so the generator produces an on-target response. Uses a reward-based adaptive search analogous to CRISP's RAS algorithm:
 prompts the LLM to generate a revised candidate targeting the flagged
@@ -43,4 +46,10 @@ def refine_tone_notes(
         broad_search=broad_search,
         conversation_history=conversation_history,
     )
+    return llm_client.call(config.REFINER_MODEL, prompt, max_tokens=512).strip()
+
+
+def tailor_backstory(background: dict, target_profile: dict) -> str:
+    """Return a backstory written for the target trait weights (replaces the generic one)."""
+    prompt = prompts.backstory_refiner_prompt(background, target_profile)
     return llm_client.call(config.REFINER_MODEL, prompt, max_tokens=512).strip()

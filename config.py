@@ -3,7 +3,7 @@ Loads config files for a given personality profile.
 
 Profiles live under config/profiles/<name>/, each containing:
     weights.json      -- target trait vector, tolerance, iteration limits
-    background.json   -- persona backstory and tone notes
+    background.json   -- character role, backstory and tone notes
 
 Falls back to config/weights.json and config/background.json if no
 profile is selected (backwards compatible).
@@ -122,11 +122,20 @@ def load_background(path: str | None = None) -> dict:
 
 def save_tone_notes(tone_notes: str, path: str | None = None) -> None:
     """Overwrite tone_notes in the active profile's background.json."""
+    _save_background_field("tone_notes", tone_notes, path)
+
+
+def save_backstory(backstory: str, path: str | None = None) -> None:
+    """Overwrite backstory in the active profile's background.json."""
+    _save_background_field("backstory", backstory, path)
+
+
+def _save_background_field(field: str, value: str, path: str | None) -> None:
     if path is None:
         path = _resolve_paths()[1]
     with open(path) as f:
         background = json.load(f)
-    background["tone_notes"] = tone_notes
+    background[field] = value
     with open(path, "w") as f:
         json.dump(background, f, indent=2)
         f.write("\n")

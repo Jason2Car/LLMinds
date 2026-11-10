@@ -118,6 +118,17 @@ def _format_transcript(transcript: list) -> str:
     )
 
 
+def tailor_backstory(session):
+    """Replace the generic backstory with one written for the target weights."""
+    new_backstory = refiner.tailor_backstory(session.background, session.target_profile)
+    config.save_backstory(new_backstory)
+    session.background["backstory"] = new_backstory
+    print(f"Tailored backstory:\n  {new_backstory}\n")
+    if _log_file:
+        _log_file.write(json.dumps({"type": "tailored_backstory", "backstory": new_backstory}) + "\n")
+        _log_file.flush()
+
+
 def run_optimize(target: dict, exchanges: int, stable_rounds: int, max_rounds: int):
     """Repeat fixed-length interviews, refining tone_notes once per interview.
 
@@ -226,6 +237,12 @@ def main():
         action="store_true",
         help="Repeat short interviews, refining tone notes once per interview, until stable",
     )
+    parser.add_argument(
+        "--tailor-backstory",
+        action="store_true",
+        help="Rewrite the character backstory from the target trait weights before "
+             "starting (always done in --optimize mode)",
+    )
     parser.add_argument("--exchanges", type=int, default=5,
                         help="Optimize: question/response pairs per interview (default 5)")
     parser.add_argument("--stable-rounds", type=int, default=2,
@@ -250,6 +267,9 @@ def main():
 
     _init_log(args.profile)
     session = CrispSession()
+
+    if args.optimize or args.tailor_backstory:
+        tailor_backstory(session)
 
     if args.optimize:
         try:

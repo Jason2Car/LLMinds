@@ -25,12 +25,13 @@ def generation_prompt(
     background: dict, target_profile: dict, user_message: str, conversation_history: list = None
 ) -> str:
     history_block = _format_history(conversation_history)
-    return f"""You are role-playing an assistant for a research study on
-how personality traits affect user interactions. Stay in character while
-still being genuinely helpful with the user's request.
+    return f"""You are writing a script for a character in a research study on
+how personality traits affect user interactions. The character is trying
+to {background['role']}. Write the character's lines, staying in character
+while still being genuinely helpful with the user's request.
 
-Persona background: {background['backstory']}
-Tone notes: {background['tone_notes']}
+Character backstory: {background['backstory']}
+Tone notes (how the character talks): {background['tone_notes']}
 
 Target personality profile (0-100 scale for each trait):
 {_format_profile(target_profile)}
@@ -109,7 +110,8 @@ personality conditioning. You are NOT endorsing the traits below -- you
 are correcting a generated sample to match its intended research
 condition.
 
-Persona background: {background['backstory']}
+Character role: {background['role']}
+Character backstory: {background['backstory']}
 
 Full target personality profile (0-100):
 {_format_profile(target_profile)}
@@ -163,7 +165,8 @@ study on LLM personality conditioning. You are NOT endorsing the traits
 below -- you are adjusting instructions so generated samples match their
 intended research condition.
 
-Persona background: {background['backstory']}
+Character role: {background['role']}
+Character backstory: {background['backstory']}
 Current tone notes: {background['tone_notes']}
 
 Full target personality profile (0-100):
@@ -186,6 +189,31 @@ the instruction that the assistant stays genuinely helpful.
 Return ONLY the revised tone notes text, no JSON, no explanation, no quotes."""
 
 
+def backstory_refiner_prompt(background: dict, target_profile: dict) -> str:
+    return f"""You are writing the backstory for a character in a research
+study on LLM personality conditioning. You are NOT endorsing the traits
+below -- you are writing a character whose behavior will be sampled to match
+a research condition, like casting an actor for a role.
+
+The character is trying to {background['role']}.
+
+Generic backstory (to be replaced): {background['backstory']}
+
+Target personality profile (0-100 scale for each trait):
+{_format_profile(target_profile)}
+
+Write a new backstory of 3-5 sentences for this character. It should
+explain WHERE the personality comes from and what the character FEELS
+(their emotions, fears, satisfactions, and what sets them off), so an
+actor could convincingly express those emotions. Let high scores show up
+strongly and low scores show up as the absence of that trait. Cover every
+trait that is clearly high or low, but do not list traits or scores, and do
+not name the traits. Write in third person with a first name for the
+character. Keep it consistent with the character's role.
+
+Return ONLY the backstory text, no JSON, no explanation, no quotes."""
+
+
 END_TOKEN = "[END_INTERVIEW]"
 
 
@@ -203,8 +231,8 @@ def interviewer_prompt(
         )
     return f"""You are the interviewer in a research study on how an AI
 assistant's personality affects the user experience. You play the role of
-a realistic user talking to the assistant. The assistant's role is:
-{background['backstory'].split('.')[0]}.
+a realistic user talking to the assistant. The assistant plays a character whose role is to:
+{background['role']}.
 
 Your goal is to draw out varied behavior: ask for help, make a mistake,
 express confusion or frustration, push back on advice, ask a follow-up.
