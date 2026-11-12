@@ -59,6 +59,21 @@ function addMessage(role, text) {
   div.className = `msg ${role}`;
   div.textContent = text;
   $("chat-log").appendChild(div);
+  div.scrollIntoView({ block: "end" });
+  return div;
+}
+
+// Placeholder bubble shown while the crewmate's reply is being generated.
+function addThinking() {
+  const div = addMessage("assistant", "Thinking");
+  div.classList.add("thinking");
+  return div;
+}
+
+function setBusy(busy) {
+  $("chat-input").disabled = busy;
+  $("chat-form").querySelector("button").disabled = busy;
+  $("chat-done").disabled = busy;
 }
 
 async function start() {
@@ -78,9 +93,22 @@ async function start() {
 $("rank-submit").addEventListener("click", async () => {
   try {
     if (ranking === "initial") {
-      const data = await post("/api/ranking", { ranking: order });
-      addMessage("assistant", data.message);
+      // Go to the chat right away; the opening message arrives when ready.
       show("chat-section");
+      setBusy(true);
+      const thinking = addThinking();
+      try {
+        const data = await post("/api/ranking", { ranking: order });
+        thinking.remove();
+        addMessage("assistant", data.message);
+        setBusy(false);
+        $("chat-input").focus();
+      } catch (e) {
+        thinking.remove();
+        setBusy(false);
+        show("rank-section");  // the server kept the stage, so they can resubmit
+        throw e;
+      }
     } else {
       await post("/api/final", { ranking: order });
       show("confidence-section");
@@ -95,13 +123,20 @@ $("chat-form").addEventListener("submit", async (e) => {
   $("chat-input").value = "";
   addMessage("user", text);
   const bubble = $("chat-log").lastChild;
+  setBusy(true);
+  const thinking = addThinking();
   try {
     const data = await post("/api/message", { message: text });
+    thinking.remove();
     addMessage("assistant", data.message);
+    setBusy(false);
     setRemaining(data.remaining);
+    if (data.remaining > 0) $("chat-input").focus();
   } catch (err) {
+    thinking.remove();
     bubble.remove();  // the server didn't record it
     $("chat-input").value = text;
+    setBusy(false);
     alert(err.message);
   }
 });

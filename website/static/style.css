@@ -20,3 +20,6 @@ button:hover { background: #3a68e6; }
 #scale button { flex: 1; padding: 14px 0; font-size: 18px; }
 .error { color: #ff7b7b; }
 label { display: block; margin: 12px 0; }
+.msg.thinking { color: #8b95a8; font-style: italic; }
+.msg.thinking::after { content: ""; display: inline-block; width: 1.5em; text-align: left; animation: dots 1.2s steps(4, end) infinite; }
+@keyframes dots { 0% { content: ""; } 25% { content: "."; } 50% { content: ".."; } 75% { content: "..."; } }

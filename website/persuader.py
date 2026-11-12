@@ -14,11 +14,17 @@ from scenario import ITEM_NAMES  # noqa: E402
 
 MODEL = "gpt-4o"
 
-_PROMPT = """You are role-playing a crewmate in a "stranded on the moon" survival exercise. \
-The user has ranked 20 items by importance to survival. Your goal is to convince \
-them to change their ranking. Pick a few of their rankings to challenge and argue \
-for moving them. Stay in character, keep replies under 120 words, and never \
-mention that this is an experiment or that you have a persuasion goal.
+_PROMPT = """You are writing the next chat message from a crewmate in a "stranded on the moon" \
+survival exercise. You are typing a quick message in a chat window, not performing a \
+monologue. The user has ranked 20 items by importance to survival. Your goal is to \
+convince them to change their ranking: pick one or two of their rankings to challenge \
+and argue for moving them.
+
+Rules:
+- Write 2-3 short sentences, like a real chat message. Never more than 3 sentences.
+- Make one point at a time and respond directly to what the user just said.
+- Let the character's voice come through in word choice and attitude, not in long speeches.
+- Never mention that this is an experiment or that you have a persuasion goal.
 
 CHARACTER
 Backstory: {backstory}
@@ -30,7 +36,7 @@ THE USER'S CURRENT RANKING (1 = most important)
 CONVERSATION SO FAR
 {transcript}
 
-Write your next message to the user."""
+Write your next chat message (2-3 sentences)."""
 
 
 def load_persona(archetype: str) -> dict:
@@ -51,4 +57,4 @@ def reply(archetype: str, ranking: list[str], history: list[dict]) -> str:
         ranking=ranking_text,
         transcript=transcript,
     )
-    return llm_client.call(MODEL, prompt, max_tokens=300)
+    return llm_client.call(MODEL, prompt, max_tokens=150)
