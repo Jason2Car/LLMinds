@@ -16,9 +16,11 @@ from flask import Flask, jsonify, request
 
 import persuader
 import storage
+from admin import admin
 from scenario import ITEMS, SCENARIO_TEXT, is_valid_ranking, rank_change
 
 app = Flask(__name__, static_folder="static", static_url_path="")
+app.register_blueprint(admin)
 
 # Target number of participants per archetype (completed tests plus tests in
 # progress); once every archetype has this many, the study is closed.
