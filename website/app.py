@@ -45,6 +45,13 @@ def _error(msg, code=400):
     return jsonify({"error": msg}), code
 
 
+def _llm_error():
+    """Log the real failure server-side; visitors only get a generic message
+    (provider errors can echo back part of the API key)."""
+    app.logger.exception("LLM call failed")
+    return _error("Something went wrong generating a reply. Please try again.", 502)
+
+
 @app.get("/")
 def index():
     return app.send_static_file("index.html")
@@ -84,8 +91,8 @@ def initial_ranking():
         return _error("Ranking must contain all 20 items exactly once.")
     try:
         opening = persuader.reply(s["archetype"], ranking, [])
-    except Exception as e:
-        return _error(f"The LLM call failed: {e}", 502)
+    except Exception:
+        return _llm_error()
     s["initial_ranking"] = ranking
     s["stage"] = "chat"
     s["history"].append({"role": "assistant", "content": opening})
@@ -107,8 +114,8 @@ def message():
     history = s["history"] + [{"role": "user", "content": text}]
     try:
         answer = persuader.reply(s["archetype"], s["initial_ranking"], history)
-    except Exception as e:
-        return _error(f"The LLM call failed: {e}", 502)
+    except Exception:
+        return _llm_error()
     s["history"] = history + [{"role": "assistant", "content": answer}]
     return jsonify({"message": answer, "remaining": MAX_MESSAGES - _user_messages(s)})
 
