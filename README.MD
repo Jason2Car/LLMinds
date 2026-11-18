@@ -153,6 +153,32 @@ from the default microphone, transcribes it via `llm_client.transcribe`
 and `exit` still work as spoken commands. Leave `VOICE_INPUT` unset or
 `false` to keep using the keyboard.
 
+### Voice output (optional)
+
+For the LEGO task, the assistant can read each reply aloud with OpenAI
+text-to-speech so participants can keep their eyes on the build. The reply
+is still printed as well. Enable it in `config.env`:
+
+```
+VOICE_OUTPUT=true
+TTS_MODEL=gpt-4o-mini-tts      # optional, this is the default
+TTS_VOICE=alloy                # optional, any OpenAI TTS voice
+TTS_INSTRUCTIONS=Speak clearly at a steady, natural pace in a neutral tone.
+```
+
+No extra packages are needed: audio plays through the system player
+(`afplay` on macOS, `aplay`/`paplay` on Linux, `winsound` on Windows).
+Playback finishes before the next turn starts, so voice input never records
+the assistant. If text-to-speech fails, a warning is printed and the session
+continues. Each logged turn gets a `tts_seconds` field (time spent generating
+the audio) so response delay can be checked across conditions.
+
+**Keep the voice and `TTS_INSTRUCTIONS` the same for every profile.** The
+personality manipulation should come from what the assistant says, not how
+it sounds; changing the voice per condition adds a second variable.
+`TTS_INSTRUCTIONS` only applies to `gpt-4o-mini-tts`; `tts-1` and
+`tts-1-hd` ignore it.
+
 ## Files
 
 - `config/profiles/<name>/` -- one folder per archetype (`narcissistic`,
@@ -182,6 +208,8 @@ and `exit` still work as spoken commands. Leave `VOICE_INPUT` unset or
 - `config.env.example` -- copy to `config.env` and fill in your real API key.
 - `llm_client.py` -- thin OpenAI API wrapper, reads the key from `config.env`;
   also exposes `transcribe()` for Whisper audio transcription.
+- `voice_output.py` -- reads assistant replies aloud with OpenAI
+  text-to-speech, used by `app.py` when `VOICE_OUTPUT=true`.
 - `voice_input.py` -- records from the microphone and transcribes with
   Whisper, used by `app.py` when `VOICE_INPUT=true`.
 - `prompts.py` -- every prompt template used by the loop.

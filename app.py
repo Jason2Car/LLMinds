@@ -63,8 +63,19 @@ def _log_turn(user_message: str, result: dict):
         "iterations_used": result["iterations_used"],
         "converged": result["converged"],
     }
+    if config.VOICE_OUTPUT_ENABLED:
+        record["tts_seconds"] = result.get("tts_seconds")
     _log_file.write(json.dumps(record) + "\n")
     _log_file.flush()
+
+
+def _say(text: str) -> float | None:
+    """Print-then-speak hook: reads the reply aloud when VOICE_OUTPUT=true."""
+    if not config.VOICE_OUTPUT_ENABLED:
+        return None
+    from voice_output import speak
+
+    return speak(text)
 
 
 def _get_user_input() -> str:
@@ -300,6 +311,8 @@ def main():
                     break
 
                 response = session.respond(user_message)
+                print(f"\nAssistant: {response}\n")
+                tts_seconds = _say(response)
                 _log_turn(user_message, {
                     "response": response,
                     "scores": {},
@@ -307,8 +320,8 @@ def main():
                     "worst_excess": None,
                     "iterations_used": 0,
                     "converged": True,
+                    "tts_seconds": tts_seconds,
                 })
-                print(f"\nAssistant: {response}\n")
         finally:
             if _log_file:
                 _log_file.close()
@@ -333,8 +346,9 @@ def main():
                 continue
 
             _last_result = session.handle_user_message(user_message)
-            _log_turn(user_message, _last_result)
             print(f"\nAssistant: {_last_result['response']}\n")
+            _last_result["tts_seconds"] = _say(_last_result["response"])
+            _log_turn(user_message, _last_result)
     finally:
         if _log_file:
             _log_file.close()

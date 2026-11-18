@@ -48,6 +48,19 @@ VOICE_INPUT_ENABLED = _env.get("VOICE_INPUT", "false").strip().lower() in ("1", 
 WHISPER_MODEL = _env.get("WHISPER_MODEL", "whisper-1")
 VOICE_INPUT_DURATION = int(_env.get("VOICE_INPUT_DURATION", "5"))
 
+# Voice output: when VOICE_OUTPUT=true in config.env, app.py reads each
+# assistant reply aloud with OpenAI text-to-speech (in addition to printing
+# it). See voice_output.py. Keep the voice and instructions identical across
+# all four profiles so the voice itself is not a confound: the personality
+# should come from the words, not the delivery.
+VOICE_OUTPUT_ENABLED = _env.get("VOICE_OUTPUT", "false").strip().lower() in ("1", "true", "yes")
+TTS_MODEL = _env.get("TTS_MODEL", "gpt-4o-mini-tts")
+TTS_VOICE = _env.get("TTS_VOICE", "alloy")
+TTS_INSTRUCTIONS = _env.get(
+    "TTS_INSTRUCTIONS",
+    "Speak clearly at a steady, natural pace in a neutral tone.",
+)
+
 TRAIT_DIMENSIONS = [
     "openness",
     "conscientiousness",
