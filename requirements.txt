@@ -3,3 +3,4 @@ openai<2
 # Optional, only needed if VOICE_INPUT=true in config.env:
 sounddevice
 scipy
+pynput          # push-to-talk (VOICE_INPUT_MODE=hold)

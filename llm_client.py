@@ -108,10 +108,13 @@ def call(model: str, prompt: str, max_tokens: int = 1024, retries: int = 3) -> s
     raise RuntimeError(f"LLM call failed after {retries} attempts: {last_error}")
 
 
-def transcribe(audio_path: str, model: str = "whisper-1") -> str:
-    """Transcribe an audio file to text using OpenAI's Whisper API."""
+def transcribe(audio_path: str, model: str = "whisper-1", language: str | None = None) -> str:
+    """Transcribe an audio file to text using OpenAI's Whisper API.
+    `language` (ISO code like "en") improves accuracy and cuts down on
+    Whisper inventing text from near-silent clips."""
+    extra = {"language": language} if language else {}
     with open(audio_path, "rb") as f:
-        transcript = _openai_client().audio.transcriptions.create(model=model, file=f)
+        transcript = _openai_client().audio.transcriptions.create(model=model, file=f, **extra)
     return transcript.text.strip()
 
 

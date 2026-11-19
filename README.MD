@@ -138,20 +138,39 @@ Instead of typing, you can speak each turn and have it transcribed with
 OpenAI's Whisper API. Enable it in `config.env`:
 
 ```bash
-pip install sounddevice scipy
+pip install sounddevice scipy pynput
 ```
 
 ```
 VOICE_INPUT=true
 WHISPER_MODEL=whisper-1        # optional, this is the default
-VOICE_INPUT_DURATION=5         # optional, seconds recorded per turn
+VOICE_INPUT_MODE=hold          # hold (default), toggle, or fixed
+PUSH_TO_TALK_KEY=shift         # hold mode: shift, ctrl, alt, cmd, space, or a letter
+VOICE_INPUT_MAX_SECONDS=60     # recordings stop automatically after this
+VOICE_INPUT_DURATION=5         # fixed mode only: seconds recorded per turn
 ```
 
-With `VOICE_INPUT=true`, each turn records `VOICE_INPUT_DURATION` seconds
-from the default microphone, transcribes it via `llm_client.transcribe`
-(Whisper), and uses the resulting text as if you had typed it -- `scores`
-and `exit` still work as spoken commands. Leave `VOICE_INPUT` unset or
-`false` to keep using the keyboard.
+How a turn is recorded:
+
+- **`hold` (push-to-talk, default):** hold Shift while you talk and let go
+  to send. Shift is the default because it types nothing into the terminal.
+  This needs `pynput`, and on macOS the app the terminal runs in (Terminal,
+  iTerm, VS Code, Claude...) must be allowed under **System Settings >
+  Privacy & Security > Accessibility** (and **Input Monitoring**). Restart
+  the app after allowing it. Without permission, the app says so and falls
+  back to `toggle` instead of silently ignoring the key.
+- **`toggle`:** press Enter to start talking and Enter again to send. Works
+  everywhere with no permissions. Typing a message instead of pressing Enter
+  sends the typed text.
+- **`fixed`:** records `VOICE_INPUT_DURATION` seconds per turn.
+
+Taps shorter than 0.3 seconds and near-silent recordings are ignored and
+re-prompted, since Whisper tends to invent sentences from silence.
+`WHISPER_LANGUAGE=en` (the default) also helps; leave it empty to
+auto-detect. The recording is transcribed
+via `llm_client.transcribe` (Whisper) and used as if you had typed it --
+`scores` and `exit` still work as spoken commands. Leave `VOICE_INPUT`
+unset or `false` to keep using the keyboard.
 
 ### Voice output (optional)
 

@@ -46,7 +46,14 @@ _env = _load_env()
 # text. See voice_input.py.
 VOICE_INPUT_ENABLED = _env.get("VOICE_INPUT", "false").strip().lower() in ("1", "true", "yes")
 WHISPER_MODEL = _env.get("WHISPER_MODEL", "whisper-1")
+# Spoken language for Whisper (ISO code). Empty = auto-detect.
+WHISPER_LANGUAGE = _env.get("WHISPER_LANGUAGE", "en").strip()
 VOICE_INPUT_DURATION = int(_env.get("VOICE_INPUT_DURATION", "5"))
+# hold = push-to-talk (hold PUSH_TO_TALK_KEY), toggle = Enter to start/stop,
+# fixed = record VOICE_INPUT_DURATION seconds. Unknown values act as toggle.
+VOICE_INPUT_MODE = _env.get("VOICE_INPUT_MODE", "hold").strip().lower()
+PUSH_TO_TALK_KEY = _env.get("PUSH_TO_TALK_KEY", "shift").strip().lower()
+VOICE_INPUT_MAX_SECONDS = int(_env.get("VOICE_INPUT_MAX_SECONDS", "60"))
 
 # Voice output: when VOICE_OUTPUT=true in config.env, app.py reads each
 # assistant reply aloud with OpenAI text-to-speech (in addition to printing
