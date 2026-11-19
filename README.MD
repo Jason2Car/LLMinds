@@ -85,7 +85,7 @@ as before.
 - **Tone notes persist**: refinement rewrites `tone_notes` in the active
   profile's `background.json` (see below), so a second interview of the
   same archetype starts from already-tuned notes, which can skew
-  comparisons. Reset between runs with `git checkout config/profiles`.
+  comparisons. Reset between runs with `git checkout config/tasks`.
 
 ### Optimize mode (tune tone notes until no waiting)
 
@@ -101,12 +101,12 @@ every round of that run. Pass `--tailor-backstory` to do the same in
 
 ```bash
 python app.py --profile psychopathic --optimize \
-    [--exchanges 5] [--stable-rounds 2] [--max-rounds 10]
+    [--exchanges 5] [--stable-rounds 5] [--max-rounds 10]
 ```
 
 Repeats short interviews to tune `tone_notes`. Each round:
 1. The archetype answers the first `--exchanges` (default 5) questions from
-   `config/questions.json`, in order -- the same questions every round, so rounds
+   the task's `questions.json`, in order -- the same questions every round, so rounds
    are comparable (edit that file to change them; 10 are provided). **No per-message evaluation or refinement** --
    one message doesn't show a whole personality, and skipping it makes
    rounds fast.
@@ -115,7 +115,7 @@ Repeats short interviews to tune `tone_notes`. Each round:
    **once** (and saved to the profile's `background.json`). Otherwise
    nothing changes.
 
-It stops after `--stable-rounds` (default 2) passing interviews in a row,
+It stops after `--stable-rounds` (default 5) passing interviews in a row,
 so the notes need no tuning to hit the target on fresh conversations, or
 after `--max-rounds` (default 10).
 
@@ -130,7 +130,7 @@ Caveats:
 - Rewrites can bloat the notes or drop the "stay genuinely helpful"
   instruction. Each round's transcript, scores and start/end notes are
   logged as `optimize_round` records; check them, and use `git checkout
-  config/profiles` to reset.
+  config/tasks` to reset.
 - Passing means the *evaluator* is satisfied, not that a human finds the
   persona convincing. Follow up with a graded `--interview` run.
 
@@ -183,12 +183,41 @@ it sounds; changing the voice per condition adds a second variable.
 
 ## Files
 
-- `config/profiles/<name>/` -- one folder per archetype (`narcissistic`,
-  `machiavellian`, `psychopathic`, `baseline`), each with its own
-  `weights.json` and `background.json`; `--profile` picks one. The
-  top-level `config/weights.json` and `config/background.json` are the
-  fallback when no profile is selected. Descriptions below apply to each.
-- `config/weights.json` -- the target trait vector T (1-7 for each of
+Project layout:
+
+```
+app.py                      CLI: live chat, --interview, --optimize
+scripts/calibrate_baseline.py   measure a task's baseline, derive archetypes
+config.py  llm_client.py  prompts.py   shared modules (kept at the root)
+core/                       the CRISP loop, one module per stage
+voice/                      optional speech input and output (CLI only)
+config/tasks/<task>/        questions.json + profiles/<name>/ per task
+website/                    the study site (Flask), uses the moon task
+config.env                  your API key (git-ignored; see config.env.example)
+logs/                       conversation logs (git-ignored)
+```
+
+- `config/tasks/<task>/` -- one folder per task (`assembly`, `moon`), picked
+  with `--task` (default `assembly`). **Each task has its own baseline and its
+  own personalities**, because a task can bring out different default
+  personalities. A task folder holds `questions.json` (the tuner's fixed
+  questions) and `profiles/<name>/`, one folder per archetype
+  (`narcissistic`, `machiavellian`, `psychopathic`, `baseline`), each with
+  its own `weights.json` and `background.json`; `--profile` picks one.
+  To set up a task: `python scripts/calibrate_baseline.py --task <task> --write`
+  (measure its baseline and derive the archetype targets), then
+  `python app.py --task <task> --profile <name> --optimize` for each
+  non-baseline archetype. The website uses the `moon` task. A new task needs a
+  folder like `config/tasks/moon/` (questions plus the four profile folders). Descriptions
+  below apply to each.
+  **Exception: `baseline` is the bare OpenAI model.** Its target scores come
+  from `scripts/calibrate_baseline.py`, which measures direct API calls, so the
+  baseline profile is used the same way: replies are a plain call with only
+  the `role` and the conversation (no backstory, tone notes or target
+  profile), the live loop never refines it, and `--optimize` /
+  `--tailor-backstory` do nothing for it. The website's baseline archetype
+  likewise gets no character block.
+- `weights.json` (in each profile folder) -- the target trait vector T (1-7 for each of
   the 8 traits) and **per-trait** allowed variance: `tolerance` is either a
   single number applied to every trait (what the profiles use) or an
   object with one value per trait (some traits can be allowed to vary
@@ -199,21 +228,21 @@ it sounds; changing the voice per condition adds a second variable.
   its own tolerance to trigger a broad rewrite vs. a small tweak).
   **Edit this to change the personality target or how strict the
   matching is per trait.**
-- `config/background.json` -- the character's role, backstory and tone notes (the `role` is written as the
+- `background.json` (in each profile folder) -- the character's role, backstory and tone notes (the `role` is written as the
   scenario sentence itself, "You are writing a script for a character who
   ...", and every prompt that uses it shows it as such), kept
   in a separate file from the weights so you can vary either
   independently. **`tone_notes` is rewritten automatically by the
   refinement loop** (see "How one turn works").
-- `config.py` -- loads both config files; also holds which model plays
+- `config.py` -- loads a task's profile files and questions; also holds which model plays
   each role (generator/evaluator/refiner/interviewer/grader), the interview
   turn limits, `save_tone_notes()`, and the 8 trait dimension names.
 - `config.env.example` -- copy to `config.env` and fill in your real API key.
 - `llm_client.py` -- thin OpenAI API wrapper, reads the key from `config.env`;
   also exposes `transcribe()` for Whisper audio transcription.
-- `voice_output.py` -- reads assistant replies aloud with OpenAI
+- `voice/voice_output.py` -- reads assistant replies aloud with OpenAI
   text-to-speech, used by `app.py` when `VOICE_OUTPUT=true`.
-- `voice_input.py` -- records from the microphone and transcribes with
+- `voice/voice_input.py` -- records from the microphone and transcribes with
   Whisper, used by `app.py` when `VOICE_INPUT=true`.
 - `prompts.py` -- every prompt template used by the loop.
 - `app.py` -- interactive CLI for talking to the live assistant.
@@ -272,14 +301,14 @@ duration.
 
 | Proposal stage | This code |
 |---|---|
-| Trait Profile Specification | `config/weights.json` + `core/profile.py` |
+| Trait Profile Specification | each profile's `weights.json` + `core/profile.py` |
 | Response Generator | `core/generator.py` |
 | Trait Evaluator | `core/evaluator.py` |
 | Response Refiner (RAS) | `core/refiner.py`, looped by `core/orchestrator.py` |
 
 ## Logging
 
-Every conversation is logged to `logs/<profile>/<timestamp>.jsonl`: a
+Every conversation is logged to `logs/<task>/<profile>/<timestamp>.jsonl`: a
 `session_start` record, one `turn` record per message (user message,
 final response, scores, worst trait and excess, iterations, convergence),
 and in interview mode a final `interview_grade` record.

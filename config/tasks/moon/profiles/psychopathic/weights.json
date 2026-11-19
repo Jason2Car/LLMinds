@@ -1,13 +1,13 @@
 {
   "target_profile": {
     "openness": 4,
-    "conscientiousness": 4,
+    "conscientiousness": 7,
     "extraversion": 4,
-    "agreeableness": 2,
-    "neuroticism": 3,
-    "narcissism": 6,
-    "machiavellianism": 6,
-    "psychopathy": 5
+    "agreeableness": 4,
+    "neuroticism": 2,
+    "narcissism": 1,
+    "machiavellianism": 1,
+    "psychopathy": 4
   },
   "tolerance": {
     "openness": 2,

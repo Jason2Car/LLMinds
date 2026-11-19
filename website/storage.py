@@ -14,7 +14,7 @@ DATA_DIR = os.environ.get(
 )
 RESULTS_FILE = os.path.join(DATA_DIR, "results.jsonl")
 
-# Archetypes are the Dark Triad profiles under ../config/profiles/.
+# Archetypes are the Dark Triad profiles under ../config/tasks/<task>/profiles/.
 ARCHETYPES = ["narcissistic", "machiavellian", "psychopathic", "baseline"]
 
 _lock = threading.Lock()

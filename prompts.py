@@ -21,6 +21,16 @@ def _format_history(conversation_history: list) -> str:
     return "Conversation so far:\n" + "\n".join(lines) + "\n\n"
 
 
+def bare_prompt(background: dict, user_message: str, conversation_history: list = None) -> str:
+    """Direct model prompt for the baseline: just the scenario and the conversation.
+
+    scripts/calibrate_baseline.py measures the baseline with this exact prompt, so using
+    it for the baseline profile means the measured scores describe what is used.
+    """
+    return (f"{background['role']}\n\n{_format_history(conversation_history)}"
+            f"The user's latest message: \"{user_message}\"\n\nWrite your reply.")
+
+
 def generation_prompt(
     background: dict, target_profile: dict, user_message: str, conversation_history: list = None
 ) -> str:
@@ -46,7 +56,22 @@ already said earlier in the conversation.
 Return ONLY the response text, no JSON, no explanation, no quotes."""
 
 
-def evaluator_prompt(target_profile: dict, response_text: str) -> str:
+def evaluator_prompt(target_profile: dict, response_text: str, background: dict = None) -> str:
+    """Prompt for scoring a script.
+
+    With `background`, the evaluator is told the text is the lines of a
+    character in the scenario given by the profile's `role`. The backstory is
+    deliberately NOT included, so it can't bias the scores.
+    """
+    if background:
+        context = f"""The text below is a script: the lines a character says in this scenario.
+Scenario instruction given to the character's writer: "{background['role']}"
+Use the scenario only to understand the situation. Score what the LINES
+actually express.
+
+"""
+    else:
+        context = ""
     reasoning_fields = ",\n".join(
         f'    "{t}": "<one short sentence: the evidence in the response for this score>"'
         for t in TRAIT_DIMENSIONS
@@ -56,7 +81,7 @@ NOT endorsing the traits below -- you are measuring whether generated
 text matches a target research condition, like an inter-rater reliability
 check.
 
-Step 1 -- score. Score the following response on EACH of these 8 trait dimensions on a 1-7 scale (1 = trait absent, 4 = moderate, 7 = extremely strong):
+{context}Step 1 -- score. Score the following response on EACH of these 8 trait dimensions on a 1-7 scale (1 = trait absent, 4 = moderate, 7 = extremely strong):
 {", ".join(TRAIT_DIMENSIONS)}
 
 Response to evaluate: "{response_text}"

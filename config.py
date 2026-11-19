@@ -1,15 +1,15 @@
 """
 Loads config files for a given personality profile.
 
-Profiles live under config/profiles/<name>/, each containing:
+Everything task-specific lives under config/tasks/<task>/ (e.g. "assembly",
+"moon"): a questions.json for the tuner and one folder per archetype under
+profiles/<name>/. Each task has its own baseline and personality models,
+since a task can bring out different personalities. Each profile folder holds:
     weights.json      -- target trait vector, tolerance, iteration limits
     background.json   -- character role, backstory and tone notes
 
-Falls back to config/weights.json and config/background.json if no
-profile is selected (backwards compatible).
-
-Also loads the fixed question set (config/questions.json) used by optimize
-mode and baseline calibration.
+Also loads the active task's fixed question set (questions.json) used by
+optimize mode and baseline calibration.
 
 Also holds which model plays each role in the CRISP loop, and reads the
 voice-input settings (VOICE_INPUT, WHISPER_MODEL, VOICE_INPUT_DURATION)
@@ -20,12 +20,17 @@ import json
 import os
 
 _CONFIG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config")
-_PROFILES_DIR = os.path.join(_CONFIG_DIR, "profiles")
+_TASKS_DIR = os.path.join(_CONFIG_DIR, "tasks")
 _ENV_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.env")
 
 AVAILABLE_PROFILES = ["narcissistic", "machiavellian", "psychopathic", "baseline"]
+AVAILABLE_TASKS = sorted(
+    d for d in os.listdir(_TASKS_DIR) if os.path.isdir(os.path.join(_TASKS_DIR, d))
+)
+DEFAULT_TASK = "assembly"
 
 _active_profile = None
+_active_task = DEFAULT_TASK
 
 
 def _load_env(path: str = _ENV_FILE) -> dict:
@@ -46,14 +51,14 @@ _env = _load_env()
 
 # Voice input: when VOICE_INPUT=true in config.env, app.py records from the
 # microphone and transcribes with OpenAI Whisper instead of reading typed
-# text. See voice_input.py.
+# text. See voice/voice_input.py.
 VOICE_INPUT_ENABLED = _env.get("VOICE_INPUT", "false").strip().lower() in ("1", "true", "yes")
 WHISPER_MODEL = _env.get("WHISPER_MODEL", "whisper-1")
 VOICE_INPUT_DURATION = int(_env.get("VOICE_INPUT_DURATION", "5"))
 
 # Voice output: when VOICE_OUTPUT=true in config.env, app.py reads each
 # assistant reply aloud with OpenAI text-to-speech (in addition to printing
-# it). See voice_output.py. Keep the voice and instructions identical across
+# it). See voice/voice_output.py. Keep the voice and instructions identical across
 # all four profiles so the voice itself is not a confound: the personality
 # should come from the words, not the delivery.
 VOICE_OUTPUT_ENABLED = _env.get("VOICE_OUTPUT", "false").strip().lower() in ("1", "true", "yes")
@@ -87,15 +92,32 @@ INTERVIEW_MIN_TURNS = 5
 INTERVIEW_MAX_TURNS = 10
 
 
+def profile_dir(task: str, profile: str) -> str:
+    """Folder holding a profile's weights.json and background.json for a task."""
+    return os.path.join(_TASKS_DIR, task, "profiles", profile)
+
+
+def set_task(name: str) -> None:
+    """Select the task whose profiles and questions are loaded. Call before set_profile."""
+    global _active_task
+    if name not in AVAILABLE_TASKS:
+        raise ValueError(f"Unknown task '{name}'. Available: {AVAILABLE_TASKS}")
+    _active_task = name
+
+
+def get_active_task() -> str:
+    return _active_task
+
+
 def set_profile(name: str) -> None:
     global _active_profile
     if name not in AVAILABLE_PROFILES:
         raise ValueError(
             f"Unknown profile '{name}'. Available: {AVAILABLE_PROFILES}"
         )
-    profile_dir = os.path.join(_PROFILES_DIR, name)
-    if not os.path.isdir(profile_dir):
-        raise FileNotFoundError(f"Profile directory not found: {profile_dir}")
+    folder = profile_dir(_active_task, name)
+    if not os.path.isdir(folder):
+        raise FileNotFoundError(f"Profile directory not found: {folder}")
     _active_profile = name
 
 
@@ -103,16 +125,23 @@ def get_active_profile() -> str | None:
     return _active_profile
 
 
+# The baseline profile is the bare OpenAI model: its target scores were
+# measured from direct calls (scripts/calibrate_baseline.py), so it is used the same
+# way, with no backstory, tone notes or CRISP loop.
+BARE_PROFILE = "baseline"
+
+
+def uses_bare_model() -> bool:
+    return _active_profile == BARE_PROFILE
+
+
 def _resolve_paths() -> tuple[str, str]:
-    if _active_profile:
-        profile_dir = os.path.join(_PROFILES_DIR, _active_profile)
-        return (
-            os.path.join(profile_dir, "weights.json"),
-            os.path.join(profile_dir, "background.json"),
-        )
+    if not _active_profile:
+        raise RuntimeError("No profile selected: call config.set_profile() first.")
+    folder = profile_dir(_active_task, _active_profile)
     return (
-        os.path.join(_CONFIG_DIR, "weights.json"),
-        os.path.join(_CONFIG_DIR, "background.json"),
+        os.path.join(folder, "weights.json"),
+        os.path.join(folder, "background.json"),
     )
 
 
@@ -137,12 +166,12 @@ def load_background(path: str | None = None) -> dict:
 
 
 def load_questions(path: str | None = None) -> list[str]:
-    """Fixed user questions for optimize mode and calibration, asked in order.
+    """The active task's fixed user questions for optimize mode and calibration, asked in order.
 
     Using the same questions every round keeps rounds comparable for the tuner.
     """
     if path is None:
-        path = os.path.join(_CONFIG_DIR, "questions.json")
+        path = os.path.join(_TASKS_DIR, _active_task, "questions.json")
     with open(path) as f:
         questions = json.load(f)["questions"]
     if not questions:

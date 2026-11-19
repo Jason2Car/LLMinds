@@ -3,15 +3,19 @@ Interactive CLI for the live CRISP-conditioned assistant.
 
 Usage:
     python app.py --profile narcissistic                  # CRISP loop every message
+    python app.py --task moon --profile narcissistic      # same, for the moon task
     python app.py --profile narcissistic --optimize       # calibrate tone_notes with a fixed question set
     python app.py --profile narcissistic --live            # production mode: no CRISP loop,
                                                           #   just the calibrated tone_notes
+
+Tasks (config/tasks/<task>/) each have their own baseline and personalities;
+--task defaults to assembly.
 
 Workflow:
     1. Run --optimize first to calibrate the tone_notes for a profile
     2. Run --live for participants to talk to the calibrated model (single API call, no loop)
 
-All conversations are automatically logged to logs/<profile>/<timestamp>.jsonl
+All conversations are automatically logged to logs/<task>/<profile>/<timestamp>.jsonl
 """
 
 import argparse
@@ -29,7 +33,9 @@ _turn_number = 0
 
 def _init_log(profile_name: str):
     global _log_file
-    log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs", profile_name)
+    log_dir = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "logs", config.get_active_task(), profile_name
+    )
     os.makedirs(log_dir, exist_ok=True)
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     log_path = os.path.join(log_dir, f"{timestamp}.jsonl")
@@ -37,6 +43,7 @@ def _init_log(profile_name: str):
 
     session_meta = {
         "type": "session_start",
+        "task": config.get_active_task(),
         "profile": profile_name,
         "target_profile": config.load_weights()["target_profile"],
         "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -75,14 +82,14 @@ def _say(text: str) -> float | None:
     """Print-then-speak hook: reads the reply aloud when VOICE_OUTPUT=true."""
     if not config.VOICE_OUTPUT_ENABLED:
         return None
-    from voice_output import speak
+    from voice.voice_output import speak
 
     return speak(text)
 
 
 def _get_user_input() -> str:
     if config.VOICE_INPUT_ENABLED:
-        from voice_input import record_and_transcribe
+        from voice.voice_input import record_and_transcribe
 
         text = record_and_transcribe().strip()
         print(f"You (voice): {text}")
@@ -146,7 +153,7 @@ def run_optimize(target: dict, exchanges: int, stable_rounds: int, max_rounds: i
     """Repeat fixed-length interviews, refining tone_notes once per interview.
 
     Each round: the archetype answers the first `exchanges` questions from
-    config/questions.json (the same questions, in the same order, every
+    the task's questions.json (the same questions, in the same order, every
     round, so rounds are comparable) with NO per-message evaluation or refinement
     (a single message doesn't show a whole personality). The assistant's
     replies are then evaluated together once; if any trait is outside its
@@ -159,7 +166,7 @@ def run_optimize(target: dict, exchanges: int, stable_rounds: int, max_rounds: i
     original = config.load_background()["tone_notes"]
     questions = config.load_questions()
     if exchanges > len(questions):
-        print(f"(only {len(questions)} questions in config/questions.json; "
+        print(f"(only {len(questions)} questions in the task's questions.json; "
               f"using {len(questions)} exchanges instead of {exchanges})")
         exchanges = len(questions)
     print(f"\nOptimize mode: {exchanges} exchanges per interview, one evaluation and "
@@ -185,7 +192,7 @@ def run_optimize(target: dict, exchanges: int, stable_rounds: int, max_rounds: i
             continue
 
         replies = "\n\n".join(t["content"] for t in transcript if t["role"] == "assistant")
-        evaluation = evaluator.evaluate_response(target, tolerances, replies)
+        evaluation = evaluator.evaluate_response(target, tolerances, replies, session.background)
         passed = evaluator.within_tolerance(evaluation)
         streak = streak + 1 if passed else 0
         print(f"Round {rnd}: scores {evaluation['scores']}")
@@ -235,6 +242,12 @@ def main():
 
     parser = argparse.ArgumentParser(description="Live CRISP-conditioned assistant")
     parser.add_argument(
+        "--task",
+        choices=config.AVAILABLE_TASKS,
+        default=config.DEFAULT_TASK,
+        help="Task whose baseline, personalities and questions to use (default: %(default)s)",
+    )
+    parser.add_argument(
         "--profile",
         choices=config.AVAILABLE_PROFILES,
         required=True,
@@ -264,8 +277,8 @@ def main():
     )
     parser.add_argument("--exchanges", type=int, default=5,
                         help="Optimize: question/response pairs per interview (default 5)")
-    parser.add_argument("--stable-rounds", type=int, default=2,
-                        help="Optimize: consecutive passing interviews required (default 2)")
+    parser.add_argument("--stable-rounds", type=int, default=5,
+                        help="Optimize: consecutive passing interviews required (default 5)")
     parser.add_argument("--max-rounds", type=int, default=10,
                         help="Optimize: give up after this many interviews (default 10)")
     parser.add_argument(
@@ -276,13 +289,20 @@ def main():
     )
     args = parser.parse_args()
 
+    config.set_task(args.task)
     config.set_profile(args.profile)
     profile_data = config.load_weights()
     target = profile_data["target_profile"]
 
-    print(f"\nLoaded profile: {args.profile}")
+    print(f"\nLoaded profile: {args.profile} (task: {args.task})")
     print(f"  Target traits: {', '.join(f'{k}={v}' for k, v in target.items())}")
     print(f"  Tolerance: {profile_data['tolerance']}, Max iterations: {profile_data['max_iterations']}")
+
+    if config.uses_bare_model() and (args.optimize or args.tailor_backstory):
+        print("\nThe baseline profile is the bare OpenAI model (no backstory or tone notes), "
+              "so there is nothing to optimize or tailor. Its targets come from "
+              "scripts/calibrate_baseline.py.")
+        return
 
     _init_log(args.profile)
     session = CrispSession()

@@ -1,5 +1,5 @@
 # Render blueprint. Deploys the study site from the repo root so the website
-# can import llm_client.py and read config/profiles/.
+# can import llm_client.py and read config/tasks/.
 services:
   - type: web
     name: moon-study

@@ -1,6 +1,8 @@
 """
-Measure the bare model's default trait scores in the baseline profile's
-scenario, then derive all four archetype targets from them.
+Measure the bare model's default trait scores in a task's baseline profile
+scenario, then derive all four archetype targets for that task from them.
+Each task (--task, default assembly) has its own baseline, because a task can
+bring out different default personalities.
 
     baseline      = the measured scores (rounded to whole numbers, clamped 1-7)
     narcissistic  = baseline, narcissism + 3, agreeableness - 2
@@ -8,20 +10,20 @@ scenario, then derive all four archetype targets from them.
     psychopathic  = baseline, psychopathy + 3, agreeableness - 2
 (BUMP and AGREEABLENESS_DROP below; results are clamped to 1-7.)
 
-The scenario is the `role` in config/profiles/baseline/background.json (the
-assembly task), not the moon scenario. Each trial runs the fixed questions in
-config/questions.json (same questions every trial, no LLM interviewer), and the
+The scenario is the `role` in the task's baseline background.json. Each trial runs the fixed questions in
+the task's questions.json (same questions every trial, no LLM interviewer), and the
 model answers through a bare prompt with just the scenario text. There is no persona,
 backstory, tone notes or target profile. The evaluator then scores all the
 replies together on the 1-7 scale, and scores are averaged over trials.
 
-    python calibrate_baseline.py                  # measure and print, change nothing
-    python calibrate_baseline.py --trials 10 --exchanges 5
-    python calibrate_baseline.py --write          # also rewrite target_profile in
-                                                  # config/profiles/*/weights.json
-    python calibrate_baseline.py --rederive       # no API calls: rebuild the archetypes
+    python scripts/calibrate_baseline.py                  # measure and print, change nothing
+    python scripts/calibrate_baseline.py --task moon      # same, for the moon task
+    python scripts/calibrate_baseline.py --trials 10 --exchanges 5
+    python scripts/calibrate_baseline.py --write          # also rewrite target_profile in
+                                                  # the task's profiles/*/weights.json
+    python scripts/calibrate_baseline.py --rederive       # no API calls: rebuild the archetypes
                                                   # from the baseline already saved in
-                                                  # config/profiles/baseline/weights.json
+                                                  # the task's baseline weights.json
 Uses GENERATOR_MODEL (replies) and EVALUATOR_MODEL (scoring) from config.py.
 """
 
@@ -30,14 +32,15 @@ import json
 import math
 import os
 import statistics
+import sys
 
-import config
-import llm_client
-import prompts
-from config import TRAIT_DIMENSIONS
-from core import evaluator
+# This script lives in scripts/; the project's modules are at the repo root.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-ROOT = os.path.dirname(os.path.abspath(__file__))
+import config  # noqa: E402
+from config import TRAIT_DIMENSIONS  # noqa: E402
+from core import evaluator, generator  # noqa: E402
+
 BUMP = 3
 # Agreeableness is lowered for every archetype: a highly agreeable character
 # can't convincingly show a Dark Triad trait.
@@ -50,23 +53,16 @@ ARCHETYPE_TRAIT = {
 }
 
 
-def bare_reply(role: str, history: list, user_message: str) -> str:
-    """Plain model reply to the user: only the task, no character or traits."""
-    prompt = (f"{role}\n\n{prompts._format_history(history)}"
-              f"The user's latest message: \"{user_message}\"\n\nWrite your reply.")
-    return llm_client.call(config.GENERATOR_MODEL, prompt, max_tokens=512).strip()
-
-
 def run_trial(background: dict, questions: list, exchanges: int) -> dict:
     """One pass over the fixed questions; returns the evaluator's scores for the replies together."""
     transcript = []
     for question in questions[:exchanges]:
-        reply = bare_reply(background["role"], transcript, question)
+        reply = generator.generate_bare_response(background, question, transcript)
         transcript.append({"role": "user", "content": question})
         transcript.append({"role": "assistant", "content": reply})
     replies = "\n\n".join(t["content"] for t in transcript if t["role"] == "assistant")
     dummy = {t: 4 for t in TRAIT_DIMENSIONS}
-    return evaluator.evaluate_response(dummy, {t: 1 for t in TRAIT_DIMENSIONS}, replies)["scores"]
+    return evaluator.evaluate_response(dummy, {t: 1 for t in TRAIT_DIMENSIONS}, replies, background)["scores"]
 
 
 def to_score(x: float) -> int:
@@ -87,7 +83,7 @@ def derive_targets(baseline: dict) -> dict:
 
 def write_targets(targets: dict) -> None:
     for name, target in targets.items():
-        path = os.path.join(ROOT, "config", "profiles", name, "weights.json")
+        path = os.path.join(config.profile_dir(config.get_active_task(), name), "weights.json")
         with open(path) as f:
             weights = json.load(f)
         weights["target_profile"] = target  # tolerances etc. are left alone
@@ -112,15 +108,19 @@ def print_table(targets: dict, means: dict | None = None, runs: list | None = No
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--task", choices=config.AVAILABLE_TASKS, default=config.DEFAULT_TASK,
+                        help="task to calibrate (default: %(default)s)")
     parser.add_argument("--trials", type=int, default=5, help="interviews to average (default 5)")
     parser.add_argument("--exchanges", type=int, default=5, help="question/reply pairs per interview (default 5)")
     parser.add_argument("--write", action="store_true", help="rewrite the profiles' target_profile")
     parser.add_argument("--rederive", action="store_true",
                         help="rebuild archetypes from the saved baseline (no API calls) and write them")
     args = parser.parse_args()
+    config.set_task(args.task)
+    print(f"Task: {args.task}")
 
     if args.rederive:
-        path = os.path.join(ROOT, "config", "profiles", "baseline", "weights.json")
+        path = os.path.join(config.profile_dir(config.get_active_task(), "baseline"), "weights.json")
         with open(path) as f:
             baseline = json.load(f)["target_profile"]
         targets = derive_targets(baseline)

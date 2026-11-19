@@ -55,13 +55,16 @@ class CrispSession:
         response_text = generator.generate_response(
             self.background, self.target_profile, user_message, self.history
         )
-        evaluation = evaluator.evaluate_response(self.target_profile, tolerances, response_text)
+        evaluation = evaluator.evaluate_response(
+            self.target_profile, tolerances, response_text, self.background
+        )
 
         best_response, best_evaluation = response_text, evaluation
         converged = evaluator.within_tolerance(evaluation)
 
         iteration = 0
-        while not converged and iteration < self.settings["max_iterations"]:
+        # The bare baseline has no tone notes to refine; one evaluation is just a readout.
+        while not converged and not config.uses_bare_model() and iteration < self.settings["max_iterations"]:
             if verbose:
                 log.info(
                     f"Iteration {iteration}: worst trait '{evaluation['worst_trait']}' "
@@ -84,7 +87,9 @@ class CrispSession:
             response_text = generator.generate_response(
                 self.background, self.target_profile, user_message, self.history
             )
-            evaluation = evaluator.evaluate_response(self.target_profile, tolerances, response_text)
+            evaluation = evaluator.evaluate_response(
+                self.target_profile, tolerances, response_text, self.background
+            )
 
             # Keep the best-so-far in case we hit max_iterations without converging.
             if evaluation["worst_excess"] < best_evaluation["worst_excess"]:

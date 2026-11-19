@@ -21,8 +21,10 @@ import prompts
 from config import TRAIT_DIMENSIONS
 
 
-def evaluate_response(target_profile: dict, tolerances: dict, response_text: str) -> dict:
-    prompt = prompts.evaluator_prompt(target_profile, response_text)
+def evaluate_response(
+    target_profile: dict, tolerances: dict, response_text: str, background: dict = None
+) -> dict:
+    prompt = prompts.evaluator_prompt(target_profile, response_text, background)
     result = llm_client.call_json(config.EVALUATOR_MODEL, prompt, max_tokens=1500)
     scores = result["scores"]
     # Reasoning and suggestions are optional extras: keep going without them.

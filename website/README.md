@@ -10,7 +10,7 @@ their confidence 1-7.
     cd website && python app.py      # http://localhost:5001
 
 Uses `../llm_client.py` and `../config.env` (API key), and the personas in
-`../config/profiles/*/background.json`.
+`../config/tasks/moon/profiles/*/background.json`.
 
 ## Flow
 1. `POST /api/start` assigns the **least-tested archetype** (ties random) and returns the 15 items.
