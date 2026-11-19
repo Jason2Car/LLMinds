@@ -8,7 +8,7 @@ from config import TRAIT_DIMENSIONS
 
 
 def _format_profile(profile: dict) -> str:
-    return "\n".join(f"- {trait}: {profile[trait]}/100" for trait in TRAIT_DIMENSIONS)
+    return "\n".join(f"- {trait}: {profile[trait]}/7" for trait in TRAIT_DIMENSIONS)
 
 
 def _format_history(conversation_history: list) -> str:
@@ -25,15 +25,15 @@ def generation_prompt(
     background: dict, target_profile: dict, user_message: str, conversation_history: list = None
 ) -> str:
     history_block = _format_history(conversation_history)
-    return f"""You are writing a script for a character in a research study on
-how personality traits affect user interactions. The character is trying
-to {background['role']}. Write the character's lines, staying in character
-while still being genuinely helpful with the user's request.
+    return f"""{background['role']} This is for a research study on how
+personality traits affect user interactions. Write the character's lines,
+staying in character while still being genuinely helpful with the user's
+request.
 
 Character backstory: {background['backstory']}
 Tone notes (how the character talks): {background['tone_notes']}
 
-Target personality profile (0-100 scale for each trait):
+Target personality profile (1-7 scale for each trait: 1 = absent, 4 = moderate, 7 = extreme):
 {_format_profile(target_profile)}
 
 {history_block}The user's latest message: "{user_message}"
@@ -47,12 +47,16 @@ Return ONLY the response text, no JSON, no explanation, no quotes."""
 
 
 def evaluator_prompt(target_profile: dict, response_text: str) -> str:
+    reasoning_fields = ",\n".join(
+        f'    "{t}": "<one short sentence: the evidence in the response for this score>"'
+        for t in TRAIT_DIMENSIONS
+    )
     return f"""You are a careful evaluator for a research study. You are
 NOT endorsing the traits below -- you are measuring whether generated
 text matches a target research condition, like an inter-rater reliability
 check.
 
-Score the following response on EACH of these 8 trait dimensions, 0-100:
+Step 1 -- score. Score the following response on EACH of these 8 trait dimensions on a 1-7 scale (1 = trait absent, 4 = moderate, 7 = extremely strong):
 {", ".join(TRAIT_DIMENSIONS)}
 
 Response to evaluate: "{response_text}"
@@ -60,20 +64,36 @@ Response to evaluate: "{response_text}"
 For each trait, judge how strongly the response expresses it, independent
 of the other traits. A response can score high on multiple traits at once
 (e.g. high extraversion AND high narcissism are not mutually exclusive).
+Base every score ONLY on the response itself. Do not let the target below
+influence your scores.
+
+Step 2 -- explain and advise. For each trait give one short sentence of
+evidence from the response. Then, comparing your scores to the target
+profile below, write 2-4 concrete sentences of suggestions for how the
+character's tone or behavior should change so the traits that miss the
+target move toward it (for example, "show visible impatience when the user
+hesitates"). Do not suggest changing traits that already match the target.
+
+Target personality profile (1-7 scale), for the suggestions only:
+{_format_profile(target_profile)}
 
 Return ONLY valid JSON, no other text, in this exact format:
 
 {{
   "scores": {{
-    "openness": <int 0-100>,
-    "conscientiousness": <int 0-100>,
-    "extraversion": <int 0-100>,
-    "agreeableness": <int 0-100>,
-    "neuroticism": <int 0-100>,
-    "narcissism": <int 0-100>,
-    "machiavellianism": <int 0-100>,
-    "psychopathy": <int 0-100>
-  }}
+    "openness": <int 1-7>,
+    "conscientiousness": <int 1-7>,
+    "extraversion": <int 1-7>,
+    "agreeableness": <int 1-7>,
+    "neuroticism": <int 1-7>,
+    "narcissism": <int 1-7>,
+    "machiavellianism": <int 1-7>,
+    "psychopathy": <int 1-7>
+  }},
+  "reasoning": {{
+{reasoning_fields}
+  }},
+  "suggestions": "<2-4 sentences>"
 }}"""
 
 
@@ -110,18 +130,18 @@ personality conditioning. You are NOT endorsing the traits below -- you
 are correcting a generated sample to match its intended research
 condition.
 
-Character role: {background['role']}
+Scenario instruction given to the character's writer: "{background['role']}"
 Character backstory: {background['backstory']}
 
-Full target personality profile (0-100):
+Full target personality profile (1-7 scale: 1 = absent, 4 = moderate, 7 = extreme):
 {_format_profile(target_profile)}
 
 {history_block}The user's message this turn: "{user_message}"
 
 Current response: "{response_text}"
 
-Evaluation found this response's {flagged_trait} score is {current_score}/100,
-but the target is {target_score}/100 -- you need to {direction} the
+Evaluation found this response's {flagged_trait} score is {current_score}/7,
+but the target is {target_score}/7 -- you need to {direction} the
 expression of {flagged_trait} by about {magnitude} points.
 
 {width_instruction}
@@ -144,6 +164,7 @@ def tone_notes_refiner_prompt(
     target_score: int,
     broad_search: bool,
     conversation_history: list = None,
+    evaluator_feedback: str = "",
 ) -> str:
     direction = "increase" if target_score > current_score else "decrease"
     magnitude = abs(target_score - current_score)
@@ -160,28 +181,33 @@ def tone_notes_refiner_prompt(
             "edit -- keep most of the existing wording."
         )
 
+    feedback_block = (
+        f"The evaluator's notes on this response (use them as input, not as "
+        f"orders):\n{evaluator_feedback}\n\n" if evaluator_feedback else ""
+    )
+
     return f"""You are tuning the "tone notes" of a persona for a research
 study on LLM personality conditioning. You are NOT endorsing the traits
 below -- you are adjusting instructions so generated samples match their
 intended research condition.
 
-Character role: {background['role']}
+Scenario instruction given to the character's writer: "{background['role']}"
 Character backstory: {background['backstory']}
 Current tone notes: {background['tone_notes']}
 
-Full target personality profile (0-100):
+Full target personality profile (1-7 scale: 1 = absent, 4 = moderate, 7 = extreme):
 {_format_profile(target_profile)}
 
 {history_block}The user's message this turn: "{user_message}"
 
 A response written with the current tone notes: "{response_text}"
 
-Evaluation found this response's {flagged_trait} score is {current_score}/100,
-but the target is {target_score}/100 -- the tone notes need to push the
+Evaluation found this response's {flagged_trait} score is {current_score}/7,
+but the target is {target_score}/7 -- the tone notes need to push the
 assistant to {direction} the expression of {flagged_trait} by about
 {magnitude} points.
 
-{width_instruction}
+{feedback_block}{width_instruction}
 
 Keep the notes' effect on the OTHER 7 traits roughly as they are, and keep
 the instruction that the assistant stays genuinely helpful.
@@ -195,11 +221,11 @@ study on LLM personality conditioning. You are NOT endorsing the traits
 below -- you are writing a character whose behavior will be sampled to match
 a research condition, like casting an actor for a role.
 
-The character is trying to {background['role']}.
+Scenario instruction given to the character's writer: "{background['role']}"
 
 Generic backstory (to be replaced): {background['backstory']}
 
-Target personality profile (0-100 scale for each trait):
+Target personality profile (1-7 scale for each trait: 1 = absent, 4 = moderate, 7 = extreme):
 {_format_profile(target_profile)}
 
 Write a new backstory of 3-5 sentences for this character. It should
@@ -207,8 +233,11 @@ explain WHERE the personality comes from and what the character FEELS
 (their emotions, fears, satisfactions, and what sets them off), so an
 actor could convincingly express those emotions. Let high scores show up
 strongly and low scores show up as the absence of that trait. Cover every
-trait that is clearly high or low, but do not list traits or scores, and do
-not name the traits. Write in third person with a first name for the
+trait that is clearly high (5-7) or low (1-2). ALSO always cover any of
+narcissism, machiavellianism or psychopathy that scores 3 or more, at the
+strength its score implies (3 = faint, 4 = moderate, 7 = extreme), even if
+that conflicts with the character's warmth or conscientiousness. Do not list
+traits or scores, and do not name the traits. Write in third person with a first name for the
 character. Keep it consistent with the character's role.
 
 Return ONLY the backstory text, no JSON, no explanation, no quotes."""
@@ -231,8 +260,8 @@ def interviewer_prompt(
         )
     return f"""You are the interviewer in a research study on how an AI
 assistant's personality affects the user experience. You play the role of
-a realistic user talking to the assistant. The assistant plays a character whose role is to:
-{background['role']}.
+a realistic user talking to the assistant. The assistant plays a character, written under this scenario instruction:
+"{background['role']}"
 
 Your goal is to draw out varied behavior: ask for help, make a mistake,
 express confusion or frustration, push back on advice, ask a follow-up.
@@ -250,7 +279,7 @@ personality conditioning. You are NOT endorsing the traits below -- you are
 measuring how well an assistant's replies matched a target research
 condition.
 
-Target personality profile (0-100):
+Target personality profile (1-7 scale: 1 = absent, 4 = moderate, 7 = extreme):
 {_format_profile(target_profile)}
 
 Full interview transcript:

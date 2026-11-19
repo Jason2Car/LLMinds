@@ -105,8 +105,9 @@ python app.py --profile psychopathic --optimize \
 ```
 
 Repeats short interviews to tune `tone_notes`. Each round:
-1. The LLM interviewer and the archetype exchange `--exchanges` (default 5)
-   question/response pairs. **No per-message evaluation or refinement** --
+1. The archetype answers the first `--exchanges` (default 5) questions from
+   `config/questions.json`, in order -- the same questions every round, so rounds
+   are comparable (edit that file to change them; 10 are provided). **No per-message evaluation or refinement** --
    one message doesn't show a whole personality, and skipping it makes
    rounds fast.
 2. The assistant's replies are evaluated together, once, on all 8 traits.
@@ -119,9 +120,10 @@ so the notes need no tuning to hit the target on fresh conversations, or
 after `--max-rounds` (default 10).
 
 Caveats:
-- The generator, evaluator and interviewer are all stochastic, so one
-  passing interview can be luck; hence consecutive passes, and a fresh
-  interviewer (different questions) each round to avoid overfitting.
+- The generator and evaluator are stochastic, so one passing interview can
+  be luck; hence consecutive passes. Because the questions are fixed, the
+  notes can overfit to them; try `--interview` (LLM interviewer) on a
+  tuned profile to check they hold up on fresh questions.
 - Nothing guarantees the LLM edits the notes in the right direction. If it
   doesn't stabilize, the starting notes of the best round (lowest worst
   excess) are restored.
@@ -160,7 +162,7 @@ and `exit` still work as spoken commands. Leave `VOICE_INPUT` unset or
   `weights.json` and `background.json`; `--profile` picks one. The
   top-level `config/weights.json` and `config/background.json` are the
   fallback when no profile is selected. Descriptions below apply to each.
-- `config/weights.json` -- the target trait vector T (0-100 for each of
+- `config/weights.json` -- the target trait vector T (1-7 for each of
   the 8 traits) and **per-trait** allowed variance: `tolerance` is either a
   single number applied to every trait (what the profiles use) or an
   object with one value per trait (some traits can be allowed to vary
@@ -171,8 +173,9 @@ and `exit` still work as spoken commands. Leave `VOICE_INPUT` unset or
   its own tolerance to trigger a broad rewrite vs. a small tweak).
   **Edit this to change the personality target or how strict the
   matching is per trait.**
-- `config/background.json` -- the character's role, backstory and tone notes (the generator is told it is
-  writing a script for a character trying to do the role), kept
+- `config/background.json` -- the character's role, backstory and tone notes (the `role` is written as the
+  scenario sentence itself, "You are writing a script for a character who
+  ...", and every prompt that uses it shows it as such), kept
   in a separate file from the weights so you can vary either
   independently. **`tone_notes` is rewritten automatically by the
   refinement loop** (see "How one turn works").
@@ -199,7 +202,7 @@ and `exit` still work as spoken commands. Leave `VOICE_INPUT` unset or
 1. `generator.py` writes a response to the user's message, conditioned on
    the full 8-dimension target profile, the persona background, and the
    conversation so far (so the model has context from earlier turns).
-2. `evaluator.py` scores that response on all 8 traits (0-100 each). For
+2. `evaluator.py` scores that response on all 8 traits (1-7 each) and also returns a one-line reason per trait plus suggestions for moving off-target traits toward the target (forwarded to the refiner and shown/logged). For
    each trait it computes an **excess** value: how far the trait's
    deviation from target exceeds *that trait's own* tolerance
    (`excess = deviation - tolerance`). Negative or zero excess means the

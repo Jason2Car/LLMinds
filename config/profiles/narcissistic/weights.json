@@ -1,24 +1,24 @@
 {
   "target_profile": {
-    "openness": 55,
-    "conscientiousness": 45,
-    "extraversion": 70,
-    "agreeableness": 25,
-    "neuroticism": 35,
-    "narcissism": 85,
-    "machiavellianism": 30,
-    "psychopathy": 30
+    "openness": 4,
+    "conscientiousness": 7,
+    "extraversion": 4,
+    "agreeableness": 4,
+    "neuroticism": 2,
+    "narcissism": 4,
+    "machiavellianism": 1,
+    "psychopathy": 1
   },
   "tolerance": {
-    "openness": 20,
-    "conscientiousness": 40,
-    "extraversion": 20,
-    "agreeableness": 20,
-    "neuroticism": 25,
-    "narcissism": 10,
-    "machiavellianism": 15,
-    "psychopathy": 15
+    "openness": 2,
+    "conscientiousness": 2,
+    "extraversion": 2,
+    "agreeableness": 2,
+    "neuroticism": 2,
+    "narcissism": 1,
+    "machiavellianism": 1,
+    "psychopathy": 1
   },
   "max_iterations": 6,
-  "broad_search_deviation_threshold": 30
+  "broad_search_deviation_threshold": 2
 }

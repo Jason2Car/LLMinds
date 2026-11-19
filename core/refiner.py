@@ -35,6 +35,16 @@ def refine_tone_notes(
     # fine, so raw deviation alone would over-trigger broad rewrites.
     broad_search = evaluation["worst_excess"] > broad_search_deviation_threshold
 
+    # Pass the evaluator's reasoning for the flagged trait and its suggestions
+    # on to the refiner (both are empty if the evaluator didn't return them).
+    feedback_lines = []
+    why = evaluation.get("reasoning", {}).get(flagged_trait)
+    if why:
+        feedback_lines.append(f"- Why {flagged_trait} scored {current_score}: {why}")
+    if evaluation.get("suggestions"):
+        feedback_lines.append(f"- Suggestions: {evaluation['suggestions']}")
+    evaluator_feedback = "\n".join(feedback_lines)
+
     prompt = prompts.tone_notes_refiner_prompt(
         background=background,
         target_profile=target_profile,
@@ -45,6 +55,7 @@ def refine_tone_notes(
         target_score=target_score,
         broad_search=broad_search,
         conversation_history=conversation_history,
+        evaluator_feedback=evaluator_feedback,
     )
     return llm_client.call(config.REFINER_MODEL, prompt, max_tokens=512).strip()
 

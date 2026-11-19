@@ -3,7 +3,7 @@ Interactive CLI for the live CRISP-conditioned assistant.
 
 Usage:
     python app.py --profile narcissistic                  # CRISP loop every message
-    python app.py --profile narcissistic --optimize       # calibrate tone_notes via interviews
+    python app.py --profile narcissistic --optimize       # calibrate tone_notes with a fixed question set
     python app.py --profile narcissistic --live            # production mode: no CRISP loop,
                                                           #   just the calibrated tone_notes
 
@@ -58,6 +58,8 @@ def _log_turn(user_message: str, result: dict):
         "user_message": user_message,
         "response": result["response"],
         "scores": result["scores"],
+        "reasoning": result["reasoning"],
+        "suggestions": result["suggestions"],
         "worst_trait": result["worst_trait"],
         "worst_excess": result["worst_excess"],
         "iterations_used": result["iterations_used"],
@@ -104,7 +106,7 @@ def run_interview(session, target: dict, max_turns: int):
     print(f"Turns: {grade['turns']}  (converged on {grade['converged_turns']})")
     print(f"Mean abs deviation from target: {grade['mean_abs_deviation']:.1f}")
     for trait in target:
-        print(f"  {trait}: {grade['mean_scores'][trait]:.0f} (target {target[trait]})")
+        print(f"  {trait}: {grade['mean_scores'][trait]:.1f} (target {target[trait]})")
     for key, value in grade["holistic"].items():
         print(f"  {key}: {value}")
     if _log_file:
@@ -132,8 +134,9 @@ def tailor_backstory(session):
 def run_optimize(target: dict, exchanges: int, stable_rounds: int, max_rounds: int):
     """Repeat fixed-length interviews, refining tone_notes once per interview.
 
-    Each round: an LLM interviewer and the archetype exchange `exchanges`
-    question/response pairs with NO per-message evaluation or refinement
+    Each round: the archetype answers the first `exchanges` questions from
+    config/questions.json (the same questions, in the same order, every
+    round, so rounds are comparable) with NO per-message evaluation or refinement
     (a single message doesn't show a whole personality). The assistant's
     replies are then evaluated together once; if any trait is outside its
     tolerance, tone_notes are refined once. Stops after `stable_rounds`
@@ -143,6 +146,11 @@ def run_optimize(target: dict, exchanges: int, stable_rounds: int, max_rounds: i
     settings = profile.get_search_settings()
     tolerances = settings["tolerances"]
     original = config.load_background()["tone_notes"]
+    questions = config.load_questions()
+    if exchanges > len(questions):
+        print(f"(only {len(questions)} questions in config/questions.json; "
+              f"using {len(questions)} exchanges instead of {exchanges})")
+        exchanges = len(questions)
     print(f"\nOptimize mode: {exchanges} exchanges per interview, one evaluation and "
           f"at most one refinement per interview; need {stable_rounds} passing "
           f"interview(s) in a row (max {max_rounds} rounds).")
@@ -156,12 +164,8 @@ def run_optimize(target: dict, exchanges: int, stable_rounds: int, max_rounds: i
         print(f"\n########## Round {rnd} ##########")
         transcript = []
         for turn in range(exchanges):
-            question = interviewer.next_question(
-                session.background, transcript, turn, exchanges, exchanges
-            )
-            if question is None:
-                break
-            print(f"Interviewer: {question}")
+            question = questions[turn]
+            print(f"User: {question}")
             reply = session.respond(question)
             print(f"\nAssistant: {reply}\n")
             transcript.append({"role": "user", "content": question})
@@ -174,6 +178,8 @@ def run_optimize(target: dict, exchanges: int, stable_rounds: int, max_rounds: i
         passed = evaluator.within_tolerance(evaluation)
         streak = streak + 1 if passed else 0
         print(f"Round {rnd}: scores {evaluation['scores']}")
+        if evaluation["suggestions"]:
+            print(f"Round {rnd}: evaluator suggestions: {evaluation['suggestions']}")
         print(f"Round {rnd}: worst trait '{evaluation['worst_trait']}', excess "
               f"{evaluation['worst_excess']} -> {'PASS' if passed else 'fail'} "
               f"(streak {streak}/{stable_rounds})")
@@ -191,7 +197,9 @@ def run_optimize(target: dict, exchanges: int, stable_rounds: int, max_rounds: i
         if _log_file:
             _log_file.write(json.dumps({
                 "type": "optimize_round", "round": rnd, "transcript": transcript,
-                "scores": evaluation["scores"], "worst_trait": evaluation["worst_trait"],
+                "scores": evaluation["scores"], "reasoning": evaluation["reasoning"],
+                "suggestions": evaluation["suggestions"],
+                "worst_trait": evaluation["worst_trait"],
                 "worst_excess": evaluation["worst_excess"], "passed": passed,
                 "streak": streak, "start_tone_notes": start_notes,
                 "end_tone_notes": config.load_background()["tone_notes"],
@@ -329,7 +337,10 @@ def main():
                 else:
                     print(f"Converged: {_last_result['converged']} (iterations used: {_last_result['iterations_used']})")
                     for trait, score in _last_result["scores"].items():
-                        print(f"  {trait}: {score}")
+                        why = _last_result["reasoning"].get(trait, "")
+                        print(f"  {trait}: {score}" + (f" -- {why}" if why else ""))
+                    if _last_result["suggestions"]:
+                        print(f"Suggestions: {_last_result['suggestions']}")
                 continue
 
             _last_result = session.handle_user_message(user_message)

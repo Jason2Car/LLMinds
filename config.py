@@ -8,6 +8,9 @@ Profiles live under config/profiles/<name>/, each containing:
 Falls back to config/weights.json and config/background.json if no
 profile is selected (backwards compatible).
 
+Also loads the fixed question set (config/questions.json) used by optimize
+mode and baseline calibration.
+
 Also holds which model plays each role in the CRISP loop, and reads the
 voice-input settings (VOICE_INPUT, WHISPER_MODEL, VOICE_INPUT_DURATION)
 from config.env.
@@ -118,6 +121,20 @@ def load_background(path: str | None = None) -> dict:
         path = _resolve_paths()[1]
     with open(path) as f:
         return json.load(f)
+
+
+def load_questions(path: str | None = None) -> list[str]:
+    """Fixed user questions for optimize mode and calibration, asked in order.
+
+    Using the same questions every round keeps rounds comparable for the tuner.
+    """
+    if path is None:
+        path = os.path.join(_CONFIG_DIR, "questions.json")
+    with open(path) as f:
+        questions = json.load(f)["questions"]
+    if not questions:
+        raise ValueError(f"{path} has no questions")
+    return questions
 
 
 def save_tone_notes(tone_notes: str, path: str | None = None) -> None:

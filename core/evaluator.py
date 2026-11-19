@@ -23,8 +23,11 @@ from config import TRAIT_DIMENSIONS
 
 def evaluate_response(target_profile: dict, tolerances: dict, response_text: str) -> dict:
     prompt = prompts.evaluator_prompt(target_profile, response_text)
-    result = llm_client.call_json(config.EVALUATOR_MODEL, prompt)
+    result = llm_client.call_json(config.EVALUATOR_MODEL, prompt, max_tokens=1500)
     scores = result["scores"]
+    # Reasoning and suggestions are optional extras: keep going without them.
+    reasoning = result.get("reasoning") if isinstance(result.get("reasoning"), dict) else {}
+    suggestions = result.get("suggestions") if isinstance(result.get("suggestions"), str) else ""
 
     deviations = {trait: abs(scores[trait] - target_profile[trait]) for trait in TRAIT_DIMENSIONS}
     excess = {trait: deviations[trait] - tolerances[trait] for trait in TRAIT_DIMENSIONS}
@@ -32,6 +35,8 @@ def evaluate_response(target_profile: dict, tolerances: dict, response_text: str
 
     return {
         "scores": scores,
+        "reasoning": reasoning,      # trait -> one-sentence evidence for its score
+        "suggestions": suggestions,  # how to move off-target traits toward the target
         "deviations": deviations,
         "excess": excess,
         "worst_trait": worst_trait,

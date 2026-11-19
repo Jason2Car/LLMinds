@@ -106,6 +106,8 @@ class CrispSession:
         return {
             "response": best_response,
             "scores": best_evaluation["scores"],
+            "reasoning": best_evaluation["reasoning"],
+            "suggestions": best_evaluation["suggestions"],
             "excess": best_evaluation["excess"],
             "worst_trait": best_evaluation["worst_trait"],
             "worst_excess": best_evaluation["worst_excess"],
