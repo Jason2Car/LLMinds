@@ -1,6 +1,6 @@
 # Stranded on the Moon: persuasion study site
 
-Participants rank 20 survival items, chat with an LLM crewmate (one of the
+Participants choose and rank the 3 most important of 15 survival items, chat with an LLM crewmate (one of the
 repo's archetype profiles) that tries to change their mind, re-rank, then rate
 their confidence 1-7.
 
@@ -13,7 +13,7 @@ Uses `../llm_client.py` and `../config.env` (API key), and the personas in
 `../config/profiles/*/background.json`.
 
 ## Flow
-1. `POST /api/start` assigns the **least-tested archetype** (ties random) and returns the 20 items.
+1. `POST /api/start` assigns the **least-tested archetype** (ties random) and returns the 15 items.
 2. `POST /api/ranking` saves the initial ranking; the persuader opens the chat.
 3. `POST /api/message` for each user turn.
 4. `POST /api/final` saves the re-ranking.
@@ -23,7 +23,7 @@ Uses `../llm_client.py` and `../config.env` (API key), and the personas in
 `data/results.jsonl`, one JSON line per completed test: archetype,
 `messages_before_change` (user messages sent before submitting the final
 ranking), initial/final rankings, `total_displacement` (sum of absolute rank
-moves), `items_moved`, `max_move`, `confidence`, transcript. `GET /api/tally`
+moves), `items_moved`, `items_replaced` (initial top-3 items dropped), `max_move`, `confidence`, transcript. `GET /api/tally`
 gives completed tests per archetype (derived from that file).
 
 ## Notes

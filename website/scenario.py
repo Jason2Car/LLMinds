@@ -1,11 +1,10 @@
-"""The "stranded on the moon" scenario: 20 items to rank by importance to survival."""
+"""The "stranded on the moon" scenario: pick and rank the 3 most important of 15 items."""
+
+TOP_N = 3  # how many items the participant ranks
 
 SCENARIO_TEXT = (
-    "Your spaceship has crash-landed on the moon, 200 miles from the lunar "
-    "base where your crew was due to rendezvous. Much of the equipment was "
-    "destroyed. Survival depends on reaching the base, so you must choose the "
-    "most critical items from what remains. Rank the 20 items below from "
-    "1 (most important to survival) to 20 (least important)."
+    f"From the 15 items below, choose the {TOP_N} that are most important to "
+    f"survival and rank them from 1 (most important) to {TOP_N}."
 )
 
 ITEMS = [
@@ -24,11 +23,6 @@ ITEMS = [
     {"id": "heater", "name": "Portable heating unit"},
     {"id": "compass", "name": "Magnetic compass"},
     {"id": "matches", "name": "Box of matches"},
-    {"id": "flashlight", "name": "Flashlight"},
-    {"id": "telescope", "name": "Hand-held telescope"},
-    {"id": "tape", "name": "Roll of duct tape"},
-    {"id": "multitool", "name": "Multi-tool knife"},
-    {"id": "blanket", "name": "Insulated emergency blanket"},
 ]
 
 ITEM_IDS = [i["id"] for i in ITEMS]
@@ -36,18 +30,32 @@ ITEM_NAMES = {i["id"]: i["name"] for i in ITEMS}
 
 
 def is_valid_ranking(ranking) -> bool:
-    """A ranking is a list of all item ids, each exactly once, most important first."""
-    return isinstance(ranking, list) and sorted(ranking) == sorted(ITEM_IDS)
+    """A ranking is TOP_N different item ids, most important first."""
+    return (
+        isinstance(ranking, list)
+        and len(ranking) == TOP_N
+        and len(set(ranking)) == TOP_N
+        and all(item in ITEM_NAMES for item in ranking)
+    )
 
 
 def rank_change(before: list[str], after: list[str]) -> dict:
-    """How far a final ranking moved from the initial one."""
+    """How far the final top-N moved from the initial one.
+
+    An item outside the top N counts as position N + 1, so swapping in a new
+    item moves both the item that came out and the one that went in.
+    """
+    outside = TOP_N + 1
     pos_before = {item: i + 1 for i, item in enumerate(before)}
     pos_after = {item: i + 1 for i, item in enumerate(after)}
-    moves = {item: pos_after[item] - pos_before[item] for item in before}
+    moves = {
+        item: pos_after.get(item, outside) - pos_before.get(item, outside)
+        for item in set(before) | set(after)
+    }
     return {
         "total_displacement": sum(abs(d) for d in moves.values()),
         "items_moved": sum(1 for d in moves.values() if d != 0),
+        "items_replaced": sum(1 for item in before if item not in after),
         "max_move": max(abs(d) for d in moves.values()),
         "per_item": moves,
     }

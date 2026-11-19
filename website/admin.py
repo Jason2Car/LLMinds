@@ -19,7 +19,7 @@ admin = Blueprint("admin", __name__, url_prefix="/admin")
 
 CSV_COLUMNS = [
     "completed_at", "archetype", "messages_before_change", "total_displacement",
-    "items_moved", "max_move", "confidence", "initial_ranking", "final_ranking",
+    "items_moved", "items_replaced", "max_move", "confidence", "initial_ranking", "final_ranking",
     "session_id",
 ]
 

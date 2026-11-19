@@ -1,6 +1,7 @@
 let sessionId = null;
 let items = [];
-let order = [];          // item ids, most important first
+let picked = [];         // chosen item ids, most important first
+let topN = 3;            // how many items to pick (set by the server)
 let ranking = "initial"; // which ranking the list is currently collecting
 
 const $ = (id) => document.getElementById(id);
@@ -24,33 +25,51 @@ function show(section) {
 }
 
 function renderList() {
-  const list = $("rank-list");
+  const list = $("picked-list");
   list.innerHTML = "";
-  order.forEach((id, i) => {
+  for (let i = 0; i < topN; i++) {
     const li = document.createElement("li");
-    li.draggable = true;
-    li.dataset.index = i;
-    li.innerHTML = `<strong>${i + 1}.</strong><span class="name">${names[id]}</span>
-      <span class="arrows"><button data-d="-1">&uarr;</button> <button data-d="1">&darr;</button></span>`;
-    li.querySelectorAll("button").forEach((b) =>
-      b.addEventListener("click", () => move(i, i + Number(b.dataset.d))));
-    li.addEventListener("dragstart", (e) => {
-      e.dataTransfer.setData("text/plain", i);
-      li.classList.add("dragging");
-    });
-    li.addEventListener("dragend", () => li.classList.remove("dragging"));
-    li.addEventListener("dragover", (e) => e.preventDefault());
-    li.addEventListener("drop", (e) => {
-      e.preventDefault();
-      move(Number(e.dataTransfer.getData("text/plain")), i);
-    });
+    const id = picked[i];
+    if (id === undefined) {
+      li.className = "empty";
+      li.innerHTML = `<strong>${i + 1}.</strong><span class="name">Click an item below to add it</span>`;
+    } else {
+      li.innerHTML = `<strong>${i + 1}.</strong><span class="name">${names[id]}</span>
+        <span class="arrows"><button data-d="-1" title="Move up">&uarr;</button>
+        <button data-d="1" title="Move down">&darr;</button>
+        <button data-remove title="Remove">&times;</button></span>`;
+      li.querySelectorAll("button[data-d]").forEach((btn) =>
+        btn.addEventListener("click", () => move(i, i + Number(btn.dataset.d))));
+      li.querySelector("button[data-remove]").addEventListener("click", () => {
+        picked.splice(i, 1);
+        renderList();
+      });
+    }
     list.appendChild(li);
+  }
+
+  const pool = $("pool-list");
+  pool.innerHTML = "";
+  const full = picked.length >= topN;
+  items.filter((it) => !picked.includes(it.id)).forEach((it) => {
+    const li = document.createElement("li");
+    const btn = document.createElement("button");
+    btn.textContent = it.name;
+    btn.disabled = full;
+    btn.addEventListener("click", () => {
+      picked.push(it.id);
+      renderList();
+    });
+    li.appendChild(btn);
+    pool.appendChild(li);
   });
+
+  $("rank-submit").disabled = picked.length !== topN;
 }
 
 function move(from, to) {
-  if (to < 0 || to >= order.length || from === to) return;
-  order.splice(to, 0, order.splice(from, 1)[0]);
+  if (to < 0 || to >= picked.length || from === to) return;
+  picked.splice(to, 0, picked.splice(from, 1)[0]);
   renderList();
 }
 
@@ -81,10 +100,14 @@ async function start() {
   sessionId = data.session_id;
   items = data.items;
   items.forEach((it) => (names[it.id] = it.name));
-  order = items.map((it) => it.id);
+  topN = data.top_n;
+  picked = [];
   $("scenario").textContent = data.scenario;
   setRemaining(data.max_messages);
-  $("rank-title").textContent = "Your ranking";
+  $("rank-title").textContent = `Your top ${topN}`;
+  $("picked-title").textContent = "Ranked, most important first";
+  $("rank-hint").textContent =
+    `Click items to add them to your top ${topN}. Use the arrows to reorder or \u00d7 to remove.`;
   $("rank-submit").textContent = "Submit ranking";
   renderList();
   show("rank-section");
@@ -98,7 +121,7 @@ $("rank-submit").addEventListener("click", async () => {
       setBusy(true);
       const thinking = addThinking();
       try {
-        const data = await post("/api/ranking", { ranking: order });
+        const data = await post("/api/ranking", { ranking: picked });
         thinking.remove();
         addMessage("assistant", data.message);
         setBusy(false);
@@ -110,7 +133,7 @@ $("rank-submit").addEventListener("click", async () => {
         throw e;
       }
     } else {
-      await post("/api/final", { ranking: order });
+      await post("/api/final", { ranking: picked });
       show("confidence-section");
     }
   } catch (e) { alert(e.message); }
@@ -151,7 +174,8 @@ function setRemaining(n) {
 
 $("chat-done").addEventListener("click", () => {
   ranking = "final";
-  $("rank-title").textContent = "Final ranking: change anything you like";
+  $("briefing").open = false;
+  $("rank-title").textContent = `Final top ${topN}: change anything you like`;
   $("rank-submit").textContent = "Submit final ranking";
   show("rank-section");
 });

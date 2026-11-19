@@ -22,13 +22,31 @@
     <p id="consent-error" class="error"></p>
   </section>
 
-  <p id="scenario"></p>
-
   <section id="rank-section" hidden>
+    <details id="briefing" class="briefing" open>
+      <summary>The scenario</summary>
+      <p>You are a member of a space crew scheduled to rendezvous with a mother
+      ship on the Moon's illuminated surface. Due to mechanical difficulties, your
+      spacecraft has crash-landed approximately 200 miles from the rendezvous point.</p>
+      <p>Most of the spacecraft and its equipment were destroyed or damaged during
+      the landing. 15 items remain intact and undamaged. Your survival depends on
+      reaching the mother ship, so you must decide which supplies are most important
+      for the journey.</p>
+      <p><strong>Assume that:</strong></p>
+      <ul>
+        <li>The crew is wearing space suits, which provide oxygen and protection from the lunar environment.</li>
+        <li>The crew must travel approximately 200 miles to reach the rendezvous point.</li>
+        <li>The listed supplies are the items that survived the crash.</li>
+      </ul>
+    </details>
     <h2 id="rank-title"></h2>
-    <p class="hint">Drag items, or use the arrows, to reorder. Top = most important.</p>
-    <ol id="rank-list"></ol>
-    <button id="rank-submit"></button>
+    <p id="scenario"></p>
+    <p class="hint" id="rank-hint"></p>
+    <h3 id="picked-title"></h3>
+    <ol id="picked-list"></ol>
+    <h3>Other items</h3>
+    <ul id="pool-list"></ul>
+    <button id="rank-submit" disabled></button>
   </section>
 
   <section id="chat-section" hidden>

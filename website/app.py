@@ -17,7 +17,7 @@ from flask import Flask, jsonify, request
 import persuader
 import storage
 from admin import admin
-from scenario import ITEMS, SCENARIO_TEXT, is_valid_ranking, rank_change
+from scenario import ITEMS, SCENARIO_TEXT, TOP_N, is_valid_ranking, rank_change
 
 app = Flask(__name__, static_folder="static", static_url_path="")
 app.register_blueprint(admin)
@@ -80,7 +80,7 @@ def start():
     }
     # The archetype is deliberately not sent to the browser.
     return jsonify({"session_id": sid, "scenario": SCENARIO_TEXT, "items": ITEMS,
-                    "max_messages": MAX_MESSAGES})
+                    "top_n": TOP_N, "max_messages": MAX_MESSAGES})
 
 
 @app.post("/api/ranking")
@@ -90,7 +90,7 @@ def initial_ranking():
     if not s or s["stage"] != "initial":
         return _error("Unknown session or wrong stage.")
     if not is_valid_ranking(ranking):
-        return _error("Ranking must contain all 20 items exactly once.")
+        return _error(f"Choose exactly {TOP_N} different items.")
     try:
         opening = persuader.reply(s["archetype"], ranking, [])
     except Exception:
@@ -129,7 +129,7 @@ def final_ranking():
     if not s or s["stage"] != "chat":
         return _error("Unknown session or wrong stage.")
     if not is_valid_ranking(ranking):
-        return _error("Ranking must contain all 20 items exactly once.")
+        return _error(f"Choose exactly {TOP_N} different items.")
     s["final_ranking"] = ranking
     s["stage"] = "confidence"
     return jsonify({"ok": True})
@@ -154,6 +154,7 @@ def confidence():
         "final_ranking": s["final_ranking"],
         "total_displacement": change["total_displacement"],
         "items_moved": change["items_moved"],
+        "items_replaced": change["items_replaced"],
         "max_move": change["max_move"],
         "confidence": rating,
         "transcript": s["history"],

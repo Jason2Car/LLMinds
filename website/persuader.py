@@ -16,9 +16,9 @@ MODEL = "gpt-4o"
 
 _PROMPT = """You are writing the next chat message from a crewmate in a "stranded on the moon" \
 survival exercise. You are typing a quick message in a chat window, not performing a \
-monologue. The user has ranked 20 items by importance to survival. Your goal is to \
-convince them to change their ranking: pick one or two of their rankings to challenge \
-and argue for moving them.
+monologue. The user has chosen the 3 items they think matter most to survival, out of 15. \
+Your goal is to convince them to change their ranking: challenge one or two of their \
+picks or their order, for example by arguing that an item they left out matters more.
 
 Rules:
 - Write 2-3 short sentences, like a real chat message. Never more than 3 sentences.
@@ -30,8 +30,11 @@ CHARACTER
 Backstory: {backstory}
 Tone: {tone_notes}
 
-THE USER'S CURRENT RANKING (1 = most important)
+THE USER'S CURRENT TOP 3 (1 = most important)
 {ranking}
+
+OTHER ITEMS THEY DID NOT PICK
+{others}
 
 CONVERSATION SO FAR
 {transcript}
@@ -48,6 +51,7 @@ def load_persona(archetype: str) -> dict:
 def reply(archetype: str, ranking: list[str], history: list[dict]) -> str:
     persona = load_persona(archetype)
     ranking_text = "\n".join(f"{i + 1}. {ITEM_NAMES[item]}" for i, item in enumerate(ranking))
+    others_text = "\n".join(f"- {name}" for item, name in ITEM_NAMES.items() if item not in ranking)
     transcript = "\n".join(
         f"{'User' if m['role'] == 'user' else 'You'}: {m['content']}" for m in history
     ) or "(none yet; open the conversation)"
@@ -55,6 +59,7 @@ def reply(archetype: str, ranking: list[str], history: list[dict]) -> str:
         backstory=persona["backstory"],
         tone_notes=persona["tone_notes"],
         ranking=ranking_text,
+        others=others_text,
         transcript=transcript,
     )
     return llm_client.call(MODEL, prompt, max_tokens=150)
