@@ -115,6 +115,30 @@ def transcribe(audio_path: str, model: str = "whisper-1") -> str:
     return transcript.text.strip()
 
 
+def synthesize_speech(
+    text: str,
+    model: str = "gpt-4o-mini-tts",
+    voice: str = "alloy",
+    instructions: str = "",
+) -> bytes:
+    """Turn text into speech with OpenAI's text-to-speech API; returns WAV bytes.
+
+    Always goes to OpenAI, even when the chat models are routed to Ollama.
+    `instructions` (tone/delivery guidance) is only understood by
+    gpt-4o-mini-tts; it is sent via extra_body so it also works on the
+    pinned openai<2 client, which predates the named parameter.
+    """
+    extra = {"instructions": instructions} if instructions and not model.startswith("tts-") else None
+    response = _openai_client().audio.speech.create(
+        model=model,
+        voice=voice,
+        input=text,
+        response_format="wav",
+        extra_body=extra,
+    )
+    return response.content
+
+
 def call_json(model: str, prompt: str, max_tokens: int = 1024, retries: int = 3) -> dict:
     """Call the model and parse the response as JSON."""
     last_error = None
